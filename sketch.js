@@ -1,9 +1,7 @@
 // ============================================
-//  ENXAME - sobrevivência em ondas (p5.js)
-//  Arraste o dedo (ou mouse / WASD / setas) para mover.
-//  A arma atira sozinha. Use pedras e caixotes como proteção,
-//  atire nos barris vermelhos para explodir os bichos,
-//  colete cristais, suba de nível e derrote a Rainha!
+//  ENXAME v3 - sobrevivência em ondas (p5.js)
+//  Jogue com a tela DEITADA: analógico à esquerda, habilidade à direita.
+//  Escolha personagem, nível (estilo Geometry Dash) e bioma no menu.
 // ============================================
 
 // ---------- CONFIGURAÇÃO (edite aqui) ----------
@@ -13,6 +11,8 @@ const CONFIG = {
   mostrarApoio: true,         // coloque false na versão para portais de jogos (Poki, CrazyGames...)
   anuncioACada: 3,            // anúncio de tela cheia a cada X partidas
   segundosParaContinuar: 20,  // tempo mínimo de partida para oferecer "continuar vendo anúncio"
+  moedasIniciais: 40,         // moedas que o jogador ganha na primeira vez
+  desbloquearTudo: false,     // true = libera todos os personagens e níveis (para testar)
 };
 
 // Gancho de anúncios: defina window.chamarAnuncio no index.html com o SDK que usar.
@@ -55,20 +55,85 @@ const DICAS = [
   "Cuidado com a explosão dos barris: ela também machuca você se estiver perto.",
 ];
 
+// ---------- Seleções do menu ----------
+const BIOMAS = [
+  { id: "floresta", nome: "Floresta", desc: "Muitas árvores e pedras.\nÓtima para se proteger.",
+    base: [100, 122, 62], fundo: [70, 88, 46], atrito: 16, velInim: 1,
+    dens: [0.3, 0.7, 0.93], pesos: [0.36, 0.30, 0.18, 0.16],
+    paleta: [[106, 128, 64], [80, 100, 50], [114, 126, 66], [90, 110, 54], [126, 114, 72], [72, 92, 52]],
+    terra: [132, 108, 74], lam: [[62, 92, 40], [118, 140, 70], [150, 130, 70]], pedra: [138, 130, 116], poeira: [196, 178, 138],
+    rocha: { f: [102, 96, 88], s: [56, 50, 44], h: [150, 144, 132] },
+    luz: "rgba(255,200,120,0.09)", meio: "rgba(30,20,28,0.08)", borda: "rgba(14,8,12,0.5)" },
+  { id: "savana", nome: "Savana", desc: "Campo aberto, poucas árvores.\nBichos 10% mais rápidos.",
+    base: [196, 164, 86], fundo: [160, 128, 62], atrito: 16, velInim: 1.1,
+    dens: [0.46, 0.8, 0.96], pesos: [0.28, 0.28, 0.12, 0.32],
+    paleta: [[204, 172, 92], [182, 150, 76], [212, 182, 104], [170, 138, 66], [188, 120, 70], [150, 126, 62]],
+    terra: [166, 104, 62], lam: [[150, 120, 50], [222, 192, 104], [124, 102, 42]], pedra: [150, 130, 104], poeira: [214, 180, 120],
+    rocha: { f: [150, 124, 92], s: [84, 62, 40], h: [196, 170, 130] },
+    luz: "rgba(255,170,70,0.14)", meio: "rgba(60,24,10,0.06)", borda: "rgba(46,16,8,0.5)" },
+  { id: "deserto", nome: "Deserto", desc: "Cactos e muitos barris.\nUse as explosões!",
+    base: [224, 192, 124], fundo: [190, 160, 96], atrito: 12, velInim: 1,
+    dens: [0.44, 0.8, 0.95], pesos: [0.28, 0.2, 0.1, 0.42],
+    paleta: [[232, 202, 138], [212, 178, 108], [238, 212, 150], [200, 166, 96], [220, 170, 100], [226, 196, 130]],
+    terra: [190, 140, 86], lam: [[190, 150, 90], [240, 214, 150], [170, 130, 76]], pedra: [170, 140, 100], poeira: [232, 204, 150],
+    rocha: { f: [196, 140, 92], s: [120, 78, 44], h: [232, 184, 130] },
+    luz: "rgba(255,226,140,0.16)", meio: "rgba(90,50,10,0.05)", borda: "rgba(70,30,6,0.42)" },
+  { id: "neve", nome: "Montanha Gelada", desc: "Chão escorregadio.\nBichos 10% mais lentos.",
+    base: [214, 226, 238], fundo: [170, 190, 210], atrito: 3.2, velInim: 0.9,
+    dens: [0.3, 0.68, 0.93], pesos: [0.38, 0.3, 0.14, 0.18],
+    paleta: [[226, 236, 246], [196, 212, 230], [236, 242, 250], [186, 204, 226], [208, 222, 240], [176, 196, 220]],
+    terra: [168, 182, 200], lam: [[110, 100, 90], [150, 140, 120], [90, 90, 96]], pedra: [140, 150, 166], poeira: [230, 240, 250],
+    rocha: { f: [120, 130, 146], s: [60, 68, 84], h: [176, 188, 206] },
+    luz: "rgba(210,232,255,0.10)", meio: "rgba(20,30,60,0.03)", borda: "rgba(10,20,48,0.32)" },
+];
+
+const PERSONAGENS = [
+  { id: "soldado", nome: "Soldado", preco: 0, hab: null, cd: 0,
+    desc: "Equilibrado e confiável.\nNão tem habilidade especial.",
+    cor: { jaq: [66, 88, 60], br: [88, 114, 78], cha: [112, 76, 46], cha2: [134, 94, 58], aba: [92, 60, 36], moc: [92, 70, 44] }, bonus: () => {} },
+  { id: "cacador", nome: "Caçador", preco: 120, hab: "dash", habNome: "Rolamento", cd: 4,
+    desc: "Rola para a frente e fica\ninvencível por um instante.\n+10% de velocidade.",
+    cor: { jaq: [128, 52, 44], br: [170, 84, 70], cha: [60, 46, 36], cha2: [86, 66, 50], aba: [44, 32, 26], moc: [70, 50, 36] }, bonus: (s) => { s.vel *= 1.1; } },
+  { id: "bombardeira", nome: "Bombardeira", preco: 250, hab: "granada", habNome: "Granada", cd: 7,
+    desc: "Lança uma granada que\nexplode e atinge vários\nbichos de uma vez.",
+    cor: { jaq: [60, 62, 74], br: [90, 94, 110], cha: [214, 112, 40], cha2: [240, 146, 60], aba: [150, 70, 24], moc: [50, 50, 58] }, bonus: (s) => { s.hpMax = 105; } },
+  { id: "medica", nome: "Médica", preco: 400, hab: "cura", habNome: "Curativo", cd: 18,
+    desc: "Cura 45% da vida e fica\nprotegida por 1 segundo.\n+15% de vida máxima.",
+    cor: { jaq: [226, 228, 226], br: [250, 250, 248], cha: [200, 70, 74], cha2: [226, 100, 104], aba: [150, 40, 46], moc: [120, 150, 130] }, marca: "cruz", bonus: (s) => { s.hpMax = 115; s.regen = 0.4; } },
+  { id: "engenheiro", nome: "Engenheiro", preco: 600, hab: "torreta", habNome: "Torreta", cd: 14,
+    desc: "Instala uma torreta que\natira sozinha por 10 s.",
+    cor: { jaq: [196, 140, 40], br: [234, 180, 70], cha: [230, 200, 50], cha2: [250, 226, 90], aba: [176, 140, 24], moc: [90, 76, 56] }, bonus: (s) => { s.hpMax = 110; } },
+  { id: "atirador", nome: "Atirador", preco: 850, hab: "rajada", habNome: "Rajada", cd: 16,
+    desc: "Rajada: atira muito mais\nrápido por 4 segundos.\n+Alcance e dano.",
+    cor: { jaq: [74, 80, 58], br: [104, 112, 80], cha: [58, 66, 46], cha2: [80, 90, 64], aba: [40, 46, 32], moc: [60, 60, 44] }, bonus: (s) => { s.alcance = 400; s.dano *= 1.15; s.cadencia *= 0.92; } },
+];
+
+// Níveis estilo Geometry Dash: cada um tem ondas, dificuldade e recompensa
+const NIVEIS = [
+  { nome: "Primeiros Passos", dif: "FÁCIL", tier: 0, ondas: 3, q: 0.7, v: 0.9, h: 0.75, d: 0.7, rampa: 1, bonus: 30, cor: [110, 190, 230] },
+  { nome: "Trilha do Besouro", dif: "NORMAL", tier: 1, ondas: 5, q: 0.9, v: 1, h: 1, d: 0.9, rampa: 1, bonus: 50, cor: [120, 200, 100] },
+  { nome: "Ninho Escuro", dif: "DIFÍCIL", tier: 2, ondas: 6, q: 1.05, v: 1.05, h: 1.2, d: 1.05, rampa: 1, bonus: 80, cor: [232, 200, 70] },
+  { nome: "Fúria da Colmeia", dif: "MUITO DIFÍCIL", tier: 3, ondas: 8, q: 1.25, v: 1.12, h: 1.5, d: 1.25, rampa: 1, bonus: 120, cor: [240, 150, 60] },
+  { nome: "Pesadelo", dif: "INSANO", tier: 4, ondas: 10, q: 1.45, v: 1.18, h: 1.9, d: 1.4, rampa: 0.95, bonus: 180, cor: [240, 90, 130] },
+  { nome: "Rainha Suprema", dif: "DEMÔNIO", tier: 5, ondas: 12, q: 1.7, v: 1.25, h: 2.5, d: 1.6, rampa: 0.95, bonus: 300, cor: [170, 80, 220] },
+  { nome: "Modo Infinito", dif: "SEM FIM", tier: -1, inf: true, ondas: 0, q: 1, v: 1, h: 1, d: 1, rampa: 1, bonus: 0, cor: [230, 180, 60] },
+];
+
 // ---------- Estado ----------
-let estado = "menu"; // menu | jogando | upgrade | fim
+let estado = "menu"; // menu | jogando | upgrade | pausa | fim | vitoria
 let jogador, st;
 let inimigos = [], tiros = [], gemas = [], particulas = [], textos = [], manchas = [], efeitos = [], menuBichos = [];
+let torretas = [], granadas = [], flocos = [];
 let cam = { x: 0, y: 0 };
 let tempo = 0, abates = 0, nivel = 1, xp = 0, xpProx = 5, pendentes = 0;
 let pegos = {}, opcoes = [];
-let onda = 0, ondaFase = "pausa", pausaT = 2.5, aSpawnar = 0, spawnT = 0, nChefes = 0, restoT = 0, furia = false, furia2 = false;
+let onda = 0, ondaFase = "pausa", pausaT = 2.5, aSpawnar = 0, spawnT = 0, nChefes = 0, restoT = 0, furia = false, furia2 = false, furia3 = false, ondaTotalInim = 1;
 let chunks = new Map(), destruidos = new Set(), podaT = 0;
 let tileImg = null;
 let tremor = 0, flashDano = 0;
 let aviso = { txt: "", ate: 0 };
 let dicaFim = DICAS[0];
-let recorde = 0, novoRecorde = false, partidas = 0, usouContinuar = false;
+let novoRecorde = false, partidas = 0, usouContinuar = false;
 let zoom = 1, ui = 1;
 let joy = { ativo: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
 let toqueConhecido = {};
@@ -76,6 +141,12 @@ let ultimoClique = 0;
 let avisoPix = 0;
 let usouTeclado = false;
 let somLigado = true, audioCtx = null, ultimoSom = 0;
+let save = { moedas: 0, donos: ["soldado"], niveis: {}, p: 0, n: 0, b: 0, recorde: 0 };
+let PA = PERSONAGENS[0], NA = NIVEIS[0], BA = BIOMAS[0];
+let habCd = 0, habMax = 1, rajadaT = 0;
+let ganho = 0, dobrou = false, estrelasGanhas = 0, pctFinal = 0, primeiraVez = false, tempoFim = 0;
+let colMenu = 0, tentouTela = false;
+const tiles = {};
 
 // ---------- Setup ----------
 function setup() {
@@ -83,14 +154,14 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(RGB, 255, 255, 255, 1);
   textFont("Trebuchet MS");
-  try {
-    recorde = parseInt(localStorage.getItem("enxameRecorde2")) || 0;
-    somLigado = localStorage.getItem("enxameSom") !== "0";
-  } catch (e) {}
+  carregar();
   ajustar();
-  tileImg = criarTile();
+  aplicarSelecao();
   resetarMundo();
   iniciarMenuBichos();
+  try {
+    document.addEventListener("visibilitychange", () => { if (document.hidden) pausar(); });
+  } catch (e) {}
 }
 
 function windowResized() {
@@ -105,72 +176,121 @@ function ajustar() {
 }
 
 function statsIniciais() {
-  return { hpMax: 100, hp: 100, vel: 150, dano: 12, cadencia: 2.4, multi: 1, perfura: 0, alcance: 340, ima: 80, laminas: 0, regen: 0 };
+  const s = { hpMax: 100, hp: 100, vel: 150, dano: 12, cadencia: 2.4, multi: 1, perfura: 0, alcance: 340, ima: 80, laminas: 0, regen: 0 };
+  if (PA && PA.bonus) PA.bonus(s);
+  s.hp = s.hpMax;
+  return s;
 }
 
 function resetarMundo() {
-  jogador = { x: 0, y: 0, r: 14, dir: 0, mira: 0, cd: 0, inv: 0, ang: 0, passo: 0, flash: 0 };
+  jogador = { x: 0, y: 0, r: 14, dir: 0, mira: 0, cd: 0, inv: 0, ang: 0, passo: 0, flash: 0, vx: 0, vy: 0, dashT: 0, dashDir: 0 };
   st = statsIniciais();
   inimigos = []; tiros = []; gemas = []; particulas = []; textos = []; manchas = []; efeitos = []; menuBichos = [];
+  torretas = []; granadas = [];
   chunks = new Map(); destruidos = new Set();
   cam.x = 0; cam.y = 0;
   tempo = 0; abates = 0; nivel = 1; xp = 0; xpProx = 5; pendentes = 0;
   pegos = {}; opcoes = [];
-  onda = 0; ondaFase = "pausa"; pausaT = 3; aSpawnar = 0; spawnT = 0; nChefes = 0;
+  onda = 0; ondaFase = "pausa"; pausaT = 3; aSpawnar = 0; spawnT = 0; nChefes = 0; restoT = 0; furia = false; furia2 = false; furia3 = false;
   tremor = 0; flashDano = 0;
+  habCd = 0; rajadaT = 0;
   joy.ativo = false;
 }
 
 function novaPartida() {
+  if (!podeJogar()) return;
+  aplicarSelecao();
   resetarMundo();
   jogador.inv = 1;
   usouContinuar = false;
   novoRecorde = false;
+  ganho = 0; dobrou = false; estrelasGanhas = 0; pctFinal = 0;
   estado = "jogando";
-  mostrarAviso("PREPARE-SE...", 2500);
+  mostrarAviso(NA.inf ? "PREPARE-SE..." : "NÍVEL " + (save.n + 1) + ": " + NA.nome.toUpperCase(), 2600);
 }
 
 // ---------- Chão (textura gerada por código) ----------
-function criarTile() {
+function criarTile(bio) {
   const pg = createGraphics(TILE, TILE);
   pg.pixelDensity(1);
   pg.colorMode(RGB, 255, 255, 255, 1);
   pg.noStroke();
-  pg.background(100, 122, 62);
-  let seed = 20261029;
+  pg.background(bio.base[0], bio.base[1], bio.base[2]);
+  let seed = 20261029 + bio.id.length * 977;
   const R = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
   const emb = (fn) => { for (const ox of [-TILE, 0, TILE]) for (const oy of [-TILE, 0, TILE]) fn(ox, oy); };
 
-  const paleta = [[106, 128, 64], [80, 100, 50], [114, 126, 66], [90, 110, 54], [126, 114, 72], [72, 92, 52]];
   for (let i = 0; i < 240; i++) {
     const x = R() * TILE, y = R() * TILE;
     const w = (26 + R() * 70) * (1 + R() * 0.4), h = (26 + R() * 70) * (0.7 + R() * 0.4);
-    const c = paleta[Math.floor(R() * paleta.length)];
-    const a = 0.14 + R() * 0.14;
-    pg.fill(c[0], c[1], c[2], a);
+    const c = bio.paleta[Math.floor(R() * bio.paleta.length)];
+    pg.fill(c[0], c[1], c[2], 0.14 + R() * 0.14);
     emb((ox, oy) => pg.ellipse(x + ox, y + oy, w, h));
   }
-  for (let i = 0; i < 14; i++) { // manchas de terra
+  for (let i = 0; i < 14; i++) {
     const x = R() * TILE, y = R() * TILE, w = 50 + R() * 80, h = 30 + R() * 50;
-    pg.fill(132, 108, 74, 0.2 + R() * 0.1);
+    pg.fill(bio.terra[0], bio.terra[1], bio.terra[2], 0.2 + R() * 0.1);
     emb((ox, oy) => pg.ellipse(x + ox, y + oy, w, h));
   }
-  pg.strokeWeight(1.3);
-  for (let i = 0; i < 2600; i++) { // folhas de grama
-    const x = R() * TILE, y = R() * TILE, len = 4 + R() * 6, k = R();
-    if (k < 0.5) pg.stroke(62 + R() * 30, 92 + R() * 40, 40 + R() * 20, 0.55);
-    else if (k < 0.85) pg.stroke(118 + R() * 30, 140 + R() * 30, 70 + R() * 20, 0.5);
-    else pg.stroke(150 + R() * 30, 130 + R() * 20, 70, 0.45);
-    pg.line(x, y, x + (R() - 0.5) * 4, y - len);
+
+  if (bio.id === "floresta" || bio.id === "savana") {
+    pg.strokeWeight(1.3);
+    const n = bio.id === "savana" ? 2200 : 2600;
+    for (let i = 0; i < n; i++) {
+      const x = R() * TILE, y = R() * TILE, len = (bio.id === "savana" ? 6 : 4) + R() * 6, k = R();
+      const c = bio.lam[k < 0.5 ? 0 : k < 0.85 ? 1 : 2];
+      pg.stroke(c[0] + (R() - 0.3) * 30, c[1] + (R() - 0.3) * 36, c[2] + (R() - 0.3) * 20, 0.5);
+      pg.line(x, y, x + (R() - 0.5) * 4, y - len);
+    }
+  } else if (bio.id === "deserto") {
+    pg.noFill();
+    pg.strokeWeight(1.6);
+    for (let i = 0; i < 110; i++) { // ondulações de areia
+      const x = R() * TILE, y = R() * TILE, len = 30 + R() * 50, claro = R() < 0.5;
+      pg.stroke(claro ? 248 : 176, claro ? 226 : 134, claro ? 170 : 80, 0.3);
+      for (const oy of [-TILE, 0, TILE]) {
+        pg.beginShape();
+        for (let k = 0; k <= 4; k++) pg.vertex(x + (k / 4) * len, y + oy + Math.sin(k * 1.3 + x) * 3);
+        pg.endShape();
+      }
+    }
+    pg.strokeWeight(1);
+    for (let i = 0; i < 700; i++) { // grãos
+      const x = R() * TILE, y = R() * TILE;
+      pg.stroke(R() < 0.5 ? 190 : 250, R() < 0.5 ? 150 : 230, 100, 0.35);
+      pg.point(x, y);
+    }
+  } else {
+    pg.strokeWeight(1.2);
+    for (let i = 0; i < 34; i++) { // rachaduras no gelo
+      let x = R() * TILE, y = R() * TILE, a = R() * TWO_PI;
+      pg.stroke(130, 160, 196, 0.32);
+      for (let k = 0; k < 4; k++) {
+        const nx = x + Math.cos(a) * (10 + R() * 14), ny = y + Math.sin(a) * (10 + R() * 14);
+        pg.line(x, y, nx, ny);
+        x = nx; y = ny; a += (R() - 0.5) * 1.2;
+      }
+    }
+    pg.noStroke();
+    for (let i = 0; i < 260; i++) { // brilhos de neve
+      pg.fill(255, 255, 255, 0.5 + R() * 0.4);
+      pg.circle(R() * TILE, R() * TILE, 1 + R() * 2);
+    }
+    pg.strokeWeight(1.2);
+    for (let i = 0; i < 36; i++) { // gravetos
+      const x = R() * TILE, y = R() * TILE, c = bio.lam[Math.floor(R() * 3)];
+      pg.stroke(c[0], c[1], c[2], 0.55);
+      pg.line(x, y, x + (R() - 0.5) * 6, y - 5 - R() * 5);
+    }
   }
   pg.noStroke();
-  for (let i = 0; i < 44; i++) { // pedrinhas
-    const x = R() * TILE, y = R() * TILE, s = 3 + R() * 4;
-    pg.fill(40, 36, 26, 0.25); pg.ellipse(x + 1.5, y + 2, s * 1.6, s * 1.1);
-    pg.fill(138, 130, 116, 0.95); pg.ellipse(x, y, s * 1.5, s * 1.1);
-    pg.fill(178, 170, 154, 0.8); pg.ellipse(x - s * 0.2, y - s * 0.2, s * 0.8, s * 0.5);
+  for (let i = 0; i < 44; i++) {
+    const x = R() * TILE, y = R() * TILE, s = 3 + R() * 4, p = bio.pedra;
+    pg.fill(40, 36, 26, 0.22); pg.ellipse(x + 1.5, y + 2, s * 1.6, s * 1.1);
+    pg.fill(p[0], p[1], p[2], 0.95); pg.ellipse(x, y, s * 1.5, s * 1.1);
+    pg.fill(Math.min(255, p[0] + 40), Math.min(255, p[1] + 40), Math.min(255, p[2] + 40), 0.8); pg.ellipse(x - s * 0.2, y - s * 0.2, s * 0.8, s * 0.5);
   }
-  pg.fill(255, 196, 120, 0.05); // luz quente de fim de tarde
+  pg.fill(255, 196, 120, 0.05);
   pg.rect(0, 0, TILE, TILE);
   return pg;
 }
@@ -192,14 +312,15 @@ function chunk(cx, cy) {
   const R = mulberry32((Math.imul(cx, 374761393) ^ Math.imul(cy, 668265263) ^ 0x5bd1e995) >>> 0);
   c = { obs: [], decor: [] };
   const roll = R();
-  const n = roll < 0.3 ? 0 : roll < 0.7 ? 1 : roll < 0.93 ? 2 : 3;
+  const n = roll < BA.dens[0] ? 0 : roll < BA.dens[1] ? 1 : roll < BA.dens[2] ? 2 : 3;
+  const p = BA.pesos;
   for (let i = 0; i < n; i++) {
     const x = cx * CH + 30 + R() * (CH - 60), y = cy * CH + 30 + R() * (CH - 60);
     const t = R();
-    const tipo = t < 0.36 ? "arvore" : t < 0.66 ? "pedra" : t < 0.84 ? "caixote" : "barril";
+    const tipo = t < p[0] ? "arvore" : t < p[0] + p[1] ? "pedra" : t < p[0] + p[1] + p[2] ? "caixote" : "barril";
     const id = k + ":" + i;
     const o = criarObstaculo(R, tipo, x, y, id);
-    if (Math.hypot(x, y) < 170 + o.r) continue;              // área segura no início
+    if (Math.hypot(x, y) < 170 + o.r) continue;
     if (tipo === "barril" && destruidos.has(id)) continue;
     if (c.obs.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + o.r + 28)) continue;
     c.obs.push(o);
@@ -211,12 +332,22 @@ function chunk(cx, cy) {
 
 function criarObstaculo(R, tipo, x, y, id) {
   if (tipo === "arvore") {
-    const blobs = [];
-    for (let i = 0; i < 5; i++) {
-      const a = R() * TWO_PI, d = R() * 20;
-      blobs.push({ dx: Math.cos(a) * d, dy: Math.sin(a) * d, r: 24 + R() * 14, outono: R() < 0.28 });
+    const v = BA.id;
+    if (v === "floresta") {
+      const blobs = [];
+      for (let i = 0; i < 5; i++) {
+        const a = R() * TWO_PI, d = R() * 20;
+        blobs.push({ dx: Math.cos(a) * d, dy: Math.sin(a) * d, r: 24 + R() * 14, outono: R() < 0.28 });
+      }
+      return { tipo, x, y, r: 21, id, blobs, v };
     }
-    return { tipo, x, y, r: 21, id, blobs };
+    if (v === "savana") {
+      const blobs = [];
+      for (let i = 0; i < 4; i++) blobs.push({ dx: (i - 1.5) * 15 + R() * 6, dy: (R() - 0.5) * 12, rx: 20 + R() * 8, ry: 12 + R() * 6 });
+      return { tipo, x, y, r: 19, id, blobs, v };
+    }
+    if (v === "deserto") return { tipo, x, y, r: 16, id, v, bracos: [R() * TWO_PI, R() * TWO_PI + Math.PI] };
+    return { tipo, x, y, r: 20, id, v, rot: R() * TWO_PI };
   }
   if (tipo === "pedra") {
     const r = 22 + R() * 16, pts = [];
@@ -277,19 +408,23 @@ function podarMapa() {
 // ---------- Loop principal ----------
 function draw() {
   const dt = Math.min(deltaTime / 1000, 0.05);
+  if (precisaGirar() && estado === "jogando") pausar();
 
   if (estado === "jogando") atualizar(dt);
   else if (estado === "menu") atualizarMenu(dt);
-  else if (estado === "fim") atualizarEfeitos(dt);
+  else if (estado === "fim" || estado === "vitoria") { tempoFim += dt; atualizarEfeitos(dt); }
+  atualizarFlocos(dt);
   tremor *= Math.exp(-12 * dt);
 
-  background(70, 88, 46);
+  background(BA.fundo[0], BA.fundo[1], BA.fundo[2]);
   desenharMundo();
   desenharAtmosfera();
+  desenharFlocos();
   desenharHUD();
   desenharTelas();
-  desenharBotaoSom();
+  desenharBotoesTopo();
   desenharAvisoPix();
+  if (precisaGirar()) desenharGire();
 }
 
 // ---------- Menu ----------
@@ -325,11 +460,22 @@ function atualizarMenu(dt) {
 // ---------- Atualização do jogo ----------
 function atualizar(dt) {
   tempo += dt;
+  habCd = Math.max(0, habCd - dt);
+  rajadaT = Math.max(0, rajadaT - dt);
 
-  // movimento do jogador
   const [dx, dy] = direcaoMov();
-  jogador.x += dx * st.vel * dt;
-  jogador.y += dy * st.vel * dt;
+  const k0 = 1 - Math.exp(-BA.atrito * dt);
+  jogador.vx += (dx * st.vel - jogador.vx) * k0;
+  jogador.vy += (dy * st.vel - jogador.vy) * k0;
+  if (jogador.dashT > 0) {
+    jogador.dashT -= dt;
+    jogador.x += Math.cos(jogador.dashDir) * 700 * dt;
+    jogador.y += Math.sin(jogador.dashDir) * 700 * dt;
+    poeira(jogador.x, jogador.y, BA.poeira, 1);
+  } else {
+    jogador.x += jogador.vx * dt;
+    jogador.y += jogador.vy * dt;
+  }
   if (dx || dy) { jogador.dir = Math.atan2(dy, dx); jogador.passo += dt * 11; }
   empurrar(jogador);
   jogador.inv = Math.max(0, jogador.inv - dt);
@@ -341,12 +487,15 @@ function atualizar(dt) {
 
   atualizarOndas(dt);
   atirar(dt);
+  atualizarTorretas(dt);
+  atualizarGranadas(dt);
   moverTiros(dt);
   moverInimigos(dt);
   atualizarLaminas(dt);
   colisoesTiros();
   atualizarGemas(dt);
   atualizarEfeitos(dt);
+  if (estado !== "jogando") return;
 
   inimigos = inimigos.filter((e) => !e.morto);
   tiros = tiros.filter((b) => b.vida > 0);
@@ -389,25 +538,30 @@ function atualizarOndas(dt) {
     return;
   }
   spawnT -= dt;
-  const cap = Math.min(14 + onda * 2, 40); // limite de bichos na tela ao mesmo tempo
+  const ef = ondaEf();
+  const cap = Math.round(Math.min(14 + ef * 2, 40) * Math.sqrt(NA.q));
   if (aSpawnar > 0 && spawnT <= 0 && inimigos.length < cap) {
-    const grupo = 1 + (onda >= 6 ? 1 : 0) + (onda >= 11 ? 1 : 0);
+    const grupo = 1 + (ef >= 6 ? 1 : 0) + (ef >= 11 ? 1 : 0);
     for (let i = 0; i < grupo && aSpawnar > 0 && inimigos.length < cap; i++) {
       criarInimigo(sortearTipo());
       aSpawnar--;
     }
-    spawnT = Math.max(0.6, 1.2 - onda * 0.04);
+    spawnT = Math.max(0.6, 1.2 - ef * 0.04);
   }
   if (aSpawnar <= 0 && inimigos.length === 0) terminarOnda();
   else if (aSpawnar <= 0) {
     restoT += dt;
     if (restoT > 18 && !furia) {
-      furia = true; // os últimos bichos correm atrás de você
+      furia = true;
       for (const e of inimigos) if (e.tipo !== "rainha") e.vel *= 1.7;
     }
     if (restoT > 40 && !furia2) {
-      furia2 = true; // quem só foge é alcançado
+      furia2 = true;
       for (const e of inimigos) if (e.tipo !== "rainha") e.vel *= 1.5;
+    }
+    if (restoT > 60 && !furia3) {
+      furia3 = true; // a Rainha também vem atrás de você
+      for (const e of inimigos) e.vel *= 1.5;
     }
   }
 }
@@ -415,34 +569,40 @@ function atualizarOndas(dt) {
 function iniciarOnda() {
   onda++;
   ondaFase = "ativa";
-  const chefe = onda % 5 === 0;
-  aSpawnar = chefe ? 4 + onda * 2 : Math.round(6 + onda * 3.5);
+  const ef = ondaEf();
+  const chefe = ondaDeChefe(onda);
+  aSpawnar = Math.max(3, Math.round((chefe ? 4 + ef * 2 : 6 + ef * 3.5) * NA.q));
+  ondaTotalInim = aSpawnar + (chefe ? 1 : 0);
   restoT = 0;
   furia = false;
   furia2 = false;
+  furia3 = false;
   spawnT = 0.6;
-  mostrarAviso("ONDA " + onda, 2200);
+  const final = !NA.inf && onda === NA.ondas;
+  mostrarAviso(final ? "ONDA FINAL!" : "ONDA " + onda, 2200);
   if (chefe) {
     criarInimigo("rainha");
     nChefes++;
-    mostrarAviso("A RAINHA CHEGOU!", 2600);
+    mostrarAviso(final ? "A RAINHA SUPREMA!" : "A RAINHA CHEGOU!", 2600);
     tremor = Math.max(tremor, 8);
     tocar("chefe");
   }
 }
 
 function terminarOnda() {
+  if (!NA.inf && onda >= NA.ondas) { vitoria(); return; }
   ondaFase = "pausa";
   pausaT = 4.5;
   st.hp = Math.min(st.hpMax, st.hp + st.hpMax * 0.15);
-  for (const g of gemas) g.puxar = true; // todos os cristais voam até você
+  for (const g of gemas) g.puxar = true;
   mostrarAviso("ONDA " + onda + " COMPLETA!", 2400);
   tocar("onda");
 }
 
 function sortearTipo() {
+  const ef = ondaEf();
   const r = Math.random();
-  const pB = onda >= 4 ? 0.18 : 0, pA = onda >= 2 ? 0.25 : 0;
+  const pB = ef >= 4 ? 0.18 : 0, pA = ef >= 2 ? 0.25 : 0;
   if (r < pB) return "blindado";
   if (r < pB + pA) return "aranha";
   return "besouro";
@@ -463,12 +623,14 @@ function criarInimigo(tipo) {
   const T = TIPOS[tipo];
   let p = posBorda();
   for (let i = 0; i < 6 && dentroDeObstaculo(p.x, p.y, T.r); i++) p = posBorda();
-  const mult = (1 + (onda - 1) * 0.22) * (tipo === "rainha" ? 1 + nChefes * 0.6 : 1);
+  const ef = ondaEf();
+  let mult = (1 + (ef - 1) * 0.22) * NA.h * (tipo === "rainha" ? 1 + nChefes * 0.6 : 1);
+  if (tipo === "rainha" && !NA.inf) mult = (1 + (ef - 1) * 0.12) * NA.h * (1 + nChefes * 0.4);
   inimigos.push({
     tipo, x: p.x, y: p.y, r: T.r,
     hp: T.hp * mult, hpMax: T.hp * mult,
-    vel: T.vel * (1 + Math.min((onda - 1) * 0.025, 0.4)) * random(0.92, 1.08),
-    dano: Math.round(T.dano * (1 + (onda - 1) * 0.05)), xp: T.xp,
+    vel: T.vel * (1 + Math.min((ef - 1) * 0.025, 0.4)) * NA.v * BA.velInim * random(0.92, 1.08),
+    dano: Math.max(1, Math.round(T.dano * (1 + (ef - 1) * 0.05) * NA.d)), xp: T.xp,
     desvio: random(-0.5, 0.5), dir: 0, anim: random(10),
     flash: 0, idade: 0, lamCd: 0, kx: 0, ky: 0, morto: false,
   });
@@ -539,8 +701,10 @@ function atirar(dt) {
   jogador.mira = girar(jogador.mira, base, 18 * dt);
   if (jogador.cd > 0) return;
 
-  for (let i = 0; i < st.multi; i++) {
-    const ang = base + (i - (st.multi - 1) / 2) * 0.17;
+  const raj = rajadaT > 0;
+  const multi = st.multi + (raj ? 2 : 0);
+  for (let i = 0; i < multi; i++) {
+    const ang = base + (i - (multi - 1) / 2) * 0.17;
     tiros.push({
       x: jogador.x + Math.cos(ang) * 30, y: jogador.y + Math.sin(ang) * 30,
       vx: Math.cos(ang) * 560, vy: Math.sin(ang) * 560,
@@ -548,7 +712,7 @@ function atirar(dt) {
     });
   }
   jogador.flash = 0.06;
-  jogador.cd = 1 / st.cadencia;
+  jogador.cd = 1 / (st.cadencia * (raj ? 2.4 : 1));
 }
 
 function moverTiros(dt) {
@@ -653,7 +817,8 @@ function explodirBarril(o) {
   explosaoGrande(o.x, o.y);
 }
 
-function explosaoGrande(x, y) {
+function explosaoGrande(x, y, amiga, dano) {
+  const raio = amiga ? 125 : 115;
   efeitos.push({ x, y, t: 0, dur: 0.5 });
   tremor = Math.max(tremor, 9);
   tocar("explosao");
@@ -665,10 +830,10 @@ function explosaoGrande(x, y) {
   for (const e of inimigos) {
     if (e.morto) continue;
     const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy);
-    if (d < 115 + e.r) causarDano(e, 90, dx || 1, dy || 0);
+    if (d < raio + e.r) causarDano(e, dano || 90, dx || 1, dy || 0);
   }
-  if (Math.hypot(jogador.x - x, jogador.y - y) < 95 && jogador.inv <= 0) ferir(18);
-  obstaculosPerto(x, y, 130, (o) => { // reação em cadeia
+  if (!amiga && Math.hypot(jogador.x - x, jogador.y - y) < 95 && jogador.inv <= 0) ferir(18);
+  obstaculosPerto(x, y, 130, (o) => {
     if (o.tipo === "barril" && Math.hypot(o.x - x, o.y - y) < 120) setTimeout(() => danoBarril(o, 60), 120);
   });
 }
@@ -692,6 +857,7 @@ function pontuacao() {
 function morrer() {
   st.hp = 0;
   estado = "fim";
+  tempoFim = 0;
   partidas++;
   tremor = 14;
   joy.ativo = false;
@@ -699,16 +865,24 @@ function morrer() {
   aviso.ate = 0;
   explosaoCor(jogador.x, jogador.y, [214, 168, 128], 30);
   tocar("morte");
-  const pts = pontuacao();
-  if (pts > recorde) {
-    recorde = pts;
-    novoRecorde = true;
-    try { localStorage.setItem("enxameRecorde2", recorde); } catch (e) {}
+  ganho = moedasDaPartida();
+  save.moedas += ganho;
+  if (NA.inf) {
+    const pts = pontuacao();
+    if (pts > save.recorde) { save.recorde = pts; novoRecorde = true; }
+  } else {
+    pctFinal = pctNivel();
+    const r = save.niveis[save.n] || (save.niveis[save.n] = { pct: 0, completo: false, estrelas: 0 });
+    r.pct = Math.max(r.pct || 0, pctFinal);
   }
+  salvar();
 }
 
 function continuarPartida() {
   usouContinuar = true;
+  save.moedas = Math.max(0, save.moedas - ganho);
+  ganho = 0;
+  salvar();
   st.hp = st.hpMax * 0.6;
   jogador.inv = 2.5;
   for (const e of inimigos) {
@@ -869,6 +1043,11 @@ function tocar(nome) {
   } else if (nome === "explosao") bip(130, 0.4, "sawtooth", 0.08, 35);
   else if (nome === "chefe") bip(90, 0.5, "sawtooth", 0.07, 40);
   else if (nome === "morte") bip(300, 0.7, "sawtooth", 0.07, 40);
+  else if (nome === "dash") bip(220, 0.18, "sine", 0.07, 700);
+  else if (nome === "granada") bip(500, 0.25, "square", 0.04, 180);
+  else if (nome === "cura") { bip(520, 0.15, "sine", 0.06); setTimeout(() => bip(780, 0.25, "sine", 0.06), 120); }
+  else if (nome === "torreta") bip(180, 0.2, "square", 0.05, 360);
+  else if (nome === "rajada") bip(300, 0.3, "sawtooth", 0.05, 900);
 }
 
 function alternarSom() {
@@ -895,6 +1074,7 @@ function desenharMundo() {
   desenharManchas();
   for (const c of cs) for (const o of c.obs) if (!o.morto) desenharObstaculo(o);
   desenharGemas();
+  desenharTorretas();
   for (const b of menuBichos) desenharBicho(b, 1);
   for (const e of inimigos) desenharBicho(e, Math.min(1, e.idade / 0.4));
   for (const e of inimigos) desenharBarraVida(e);
@@ -902,6 +1082,7 @@ function desenharMundo() {
     desenharLaminas();
     desenharJogador();
   }
+  desenharGranadas();
   desenharTiros();
   desenharEfeitos();
   desenharParticulas();
@@ -929,23 +1110,64 @@ function desenharChao(v) {
 }
 
 function desenharDecor(c) {
+  const v = BA.id;
   for (const d of c.decor) {
-    if (d.t === 0) { // tufo de grama
-      stroke(58, 86, 40, 0.8); strokeWeight(1.6);
-      line(d.x, d.y, d.x - 4, d.y - 8); line(d.x, d.y, d.x, d.y - 10); line(d.x, d.y, d.x + 4, d.y - 8);
-    } else if (d.t === 1) { // florzinha
-      noStroke();
-      const cores = [[236, 224, 190], [226, 170, 70], [200, 110, 120]];
-      const cc = cores[Math.floor(d.c * 3)];
-      fill(cc[0], cc[1], cc[2], 0.95); circle(d.x, d.y, 5);
-      fill(250, 210, 90); circle(d.x, d.y, 2);
-    } else if (d.t === 2) { // pedrinha
-      noStroke();
-      fill(40, 36, 26, 0.22); ellipse(d.x + 1, d.y + 2, 9, 5);
-      fill(136, 128, 114); ellipse(d.x, d.y, 8, 5.5);
-    } else { // folha seca
-      noStroke();
-      fill(176, 108, 48, 0.85); ellipse(d.x, d.y, 8, 4);
+    noStroke();
+    if (v === "floresta") {
+      if (d.t === 0) {
+        stroke(58, 86, 40, 0.8); strokeWeight(1.6);
+        line(d.x, d.y, d.x - 4, d.y - 8); line(d.x, d.y, d.x, d.y - 10); line(d.x, d.y, d.x + 4, d.y - 8);
+      } else if (d.t === 1) {
+        const cores = [[236, 224, 190], [226, 170, 70], [200, 110, 120]];
+        const cc = cores[Math.floor(d.c * 3)];
+        fill(cc[0], cc[1], cc[2], 0.95); circle(d.x, d.y, 5);
+        fill(250, 210, 90); circle(d.x, d.y, 2);
+      } else if (d.t === 2) {
+        fill(40, 36, 26, 0.22); ellipse(d.x + 1, d.y + 2, 9, 5);
+        fill(136, 128, 114); ellipse(d.x, d.y, 8, 5.5);
+      } else { fill(176, 108, 48, 0.85); ellipse(d.x, d.y, 8, 4); }
+    } else if (v === "savana") {
+      if (d.t === 0) {
+        stroke(138, 106, 40, 0.9); strokeWeight(1.6);
+        line(d.x, d.y, d.x - 5, d.y - 12); line(d.x, d.y, d.x - 1, d.y - 15); line(d.x, d.y, d.x + 5, d.y - 11);
+      } else if (d.t === 1) {
+        stroke(226, 196, 110, 0.9); strokeWeight(1.4);
+        line(d.x, d.y, d.x + 2, d.y - 10); line(d.x + 4, d.y, d.x + 6, d.y - 8);
+      } else if (d.t === 2) {
+        fill(60, 36, 20, 0.22); ellipse(d.x + 1, d.y + 2, 9, 5);
+        fill(156, 130, 100); ellipse(d.x, d.y, 8, 5.5);
+      } else { fill(120, 84, 44, 0.7); ellipse(d.x, d.y, 10, 4); }
+    } else if (v === "deserto") {
+      if (d.t === 0) {
+        noFill(); stroke(196, 150, 90, 0.5); strokeWeight(1.5);
+        line(d.x - 8, d.y, d.x - 3, d.y - 2); line(d.x - 3, d.y - 2, d.x + 3, d.y); line(d.x + 3, d.y, d.x + 8, d.y - 2);
+      } else if (d.t === 1) {
+        fill(80, 50, 20, 0.2); ellipse(d.x + 1, d.y + 2, 9, 5);
+        fill(176, 146, 106); ellipse(d.x, d.y, 8, 5.5);
+      } else if (d.t === 2) {
+        stroke(248, 244, 230, 0.95); strokeWeight(2.4);
+        line(d.x - 6, d.y, d.x + 6, d.y);
+        noStroke(); fill(248, 244, 230);
+        circle(d.x - 6, d.y - 1.5, 3); circle(d.x - 6, d.y + 1.5, 3); circle(d.x + 6, d.y - 1.5, 3); circle(d.x + 6, d.y + 1.5, 3);
+      } else {
+        stroke(120, 80, 40, 0.5); strokeWeight(1.2);
+        line(d.x - 6, d.y, d.x - 2, d.y - 3); line(d.x - 2, d.y - 3, d.x + 2, d.y + 1); line(d.x + 2, d.y + 1, d.x + 7, d.y - 2);
+      }
+    } else {
+      if (d.t === 0) {
+        fill(176, 214, 244, 0.9); stroke(120, 166, 210); strokeWeight(1);
+        quad(d.x, d.y - 7, d.x + 4, d.y, d.x, d.y + 7, d.x - 4, d.y);
+      } else if (d.t === 1) {
+        stroke(96, 86, 76, 0.9); strokeWeight(1.4);
+        line(d.x, d.y, d.x - 4, d.y - 8); line(d.x, d.y, d.x + 4, d.y - 7);
+        noStroke(); fill(255, 255, 255, 0.95); ellipse(d.x, d.y + 1, 10, 4);
+      } else if (d.t === 2) {
+        fill(60, 70, 96, 0.2); ellipse(d.x + 1, d.y + 2, 9, 5);
+        fill(150, 160, 176); ellipse(d.x, d.y, 8, 5.5);
+        fill(255, 255, 255, 0.95); ellipse(d.x - 1, d.y - 1.5, 6, 2.6);
+      } else {
+        fill(130, 156, 190, 0.5); ellipse(d.x, d.y, 5, 3); ellipse(d.x + 7, d.y - 3, 5, 3);
+      }
     }
   }
   noStroke();
@@ -962,25 +1184,65 @@ function desenharManchas() {
 
 function desenharObstaculo(o) {
   noStroke();
+  const R = BA.rocha;
   if (o.tipo === "arvore") {
-    fill(10, 20, 8, 0.28);
-    for (const b of o.blobs) ellipse(o.x + b.dx + 16, o.y + b.dy + 20, b.r * 2, b.r * 1.5);
-    for (const b of o.blobs) { fill(32, 58, 36); circle(o.x + b.dx, o.y + b.dy, b.r * 2); }
-    for (const b of o.blobs) { if (b.outono) fill(150, 92, 40); else fill(48, 88, 46); circle(o.x + b.dx - 2, o.y + b.dy - 3, b.r * 1.7); }
-    for (const b of o.blobs) { if (b.outono) fill(198, 138, 62, 0.85); else fill(88, 132, 64, 0.85); circle(o.x + b.dx - b.r * 0.28, o.y + b.dy - b.r * 0.3, b.r * 0.9); }
+    if (o.v === "floresta") {
+      fill(10, 20, 8, 0.28);
+      for (const b of o.blobs) ellipse(o.x + b.dx + 16, o.y + b.dy + 20, b.r * 2, b.r * 1.5);
+      for (const b of o.blobs) { fill(32, 58, 36); circle(o.x + b.dx, o.y + b.dy, b.r * 2); }
+      for (const b of o.blobs) { if (b.outono) fill(150, 92, 40); else fill(48, 88, 46); circle(o.x + b.dx - 2, o.y + b.dy - 3, b.r * 1.7); }
+      for (const b of o.blobs) { if (b.outono) fill(198, 138, 62, 0.85); else fill(88, 132, 64, 0.85); circle(o.x + b.dx - b.r * 0.28, o.y + b.dy - b.r * 0.3, b.r * 0.9); }
+    } else if (o.v === "savana") { // acácia: copa achatada
+      fill(40, 24, 10, 0.26);
+      for (const b of o.blobs) ellipse(o.x + b.dx + 12, o.y + b.dy + 18, b.rx * 2, b.ry * 2);
+      stroke(74, 52, 30); strokeWeight(4);
+      line(o.x, o.y + 6, o.x - 2, o.y - 4);
+      noStroke();
+      for (const b of o.blobs) { fill(70, 84, 38); ellipse(o.x + b.dx, o.y + b.dy, b.rx * 2, b.ry * 2); }
+      for (const b of o.blobs) { fill(104, 122, 52); ellipse(o.x + b.dx - 2, o.y + b.dy - 2, b.rx * 1.6, b.ry * 1.5); }
+      for (const b of o.blobs) { fill(150, 160, 78, 0.8); ellipse(o.x + b.dx - 4, o.y + b.dy - 4, b.rx * 0.9, b.ry * 0.7); }
+    } else if (o.v === "deserto") { // cacto visto de cima
+      fill(40, 24, 8, 0.26); ellipse(o.x + 6, o.y + 11, 46, 22);
+      for (const a of o.bracos) {
+        const bx = o.x + Math.cos(a) * 17, by = o.y + Math.sin(a) * 17;
+        fill(40, 96, 52); circle(bx, by, 17);
+        fill(70, 140, 80); circle(bx - 1, by - 1, 12);
+      }
+      fill(40, 96, 52); stroke(24, 64, 34); strokeWeight(2); circle(o.x, o.y, 34);
+      noStroke(); fill(66, 134, 76); circle(o.x - 1, o.y - 1, 28);
+      stroke(40, 100, 54, 0.9); strokeWeight(1.5);
+      for (let i = 0; i < 8; i++) { const a = (i * TWO_PI) / 8; line(o.x + Math.cos(a) * 5, o.y + Math.sin(a) * 5, o.x + Math.cos(a) * 14, o.y + Math.sin(a) * 14); }
+      noStroke(); fill(230, 226, 190);
+      for (let i = 0; i < 8; i++) { const a = (i * TWO_PI) / 8 + 0.4; circle(o.x + Math.cos(a) * 13, o.y + Math.sin(a) * 13, 2); }
+      fill(232, 110, 150); circle(o.x, o.y, 8);
+      fill(250, 206, 110); circle(o.x, o.y, 3.5);
+    } else { // pinheiro nevado visto de cima
+      fill(10, 24, 50, 0.26); ellipse(o.x + 10, o.y + 16, 54, 24);
+      const camadas = [[27, [22, 56, 50]], [20, [36, 84, 66]], [13, [58, 112, 84]]];
+      for (const [rad, cor] of camadas) {
+        fill(cor[0], cor[1], cor[2]);
+        beginShape();
+        for (let i = 0; i < 12; i++) { const a = o.rot + (i * TWO_PI) / 12, rr = i % 2 === 0 ? rad : rad * 0.58; vertex(o.x + Math.cos(a) * rr, o.y + Math.sin(a) * rr); }
+        endShape(CLOSE);
+      }
+      fill(255, 255, 255, 0.9);
+      for (let i = 0; i < 5; i++) { const a = o.rot + i * 1.26; ellipse(o.x + Math.cos(a) * 15, o.y + Math.sin(a) * 15, 10, 6); }
+      circle(o.x, o.y, 8);
+    }
   } else if (o.tipo === "pedra") {
     fill(20, 18, 10, 0.3);
     ellipse(o.x + 8, o.y + o.r * 0.55, o.r * 2.2, o.r * 1.3);
-    fill(102, 96, 88); stroke(56, 50, 44); strokeWeight(2);
+    fill(R.f[0], R.f[1], R.f[2]); stroke(R.s[0], R.s[1], R.s[2]); strokeWeight(2);
     beginShape(); for (const p of o.pts) vertex(o.x + p.x, o.y + p.y); endShape(CLOSE);
     noStroke();
-    fill(150, 144, 132, 0.85);
+    fill(R.h[0], R.h[1], R.h[2], 0.85);
     beginShape(); for (const p of o.pts) vertex(o.x + p.x * 0.62 - o.r * 0.12, o.y + p.y * 0.62 - o.r * 0.14); endShape(CLOSE);
-    fill(66, 62, 56, 0.45);
+    fill(R.s[0], R.s[1], R.s[2], 0.4);
     beginShape(); for (const p of o.pts) vertex(o.x + p.x * 0.5 + o.r * 0.28, o.y + p.y * 0.5 + o.r * 0.3); endShape(CLOSE);
-    stroke(60, 54, 48, 0.7); strokeWeight(1.5);
+    stroke(R.s[0], R.s[1], R.s[2], 0.7); strokeWeight(1.5);
     line(o.x - o.r * 0.1, o.y - o.r * 0.1, o.x + o.r * 0.25, o.y + o.r * 0.25);
     noStroke();
+    if (BA.id === "neve") { fill(255, 255, 255, 0.92); ellipse(o.x - o.r * 0.18, o.y - o.r * 0.3, o.r * 1.15, o.r * 0.7); }
   } else if (o.tipo === "caixote") {
     push();
     translate(o.x, o.y);
@@ -995,8 +1257,9 @@ function desenharObstaculo(o) {
     line(-s / 2 + 3, -s / 2 + 3, s / 2 - 3, -s / 2 + 3);
     noStroke(); fill(70, 50, 28);
     for (const [px, py] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) circle(px * (s / 2 - 5), py * (s / 2 - 5), 3);
+    if (BA.id === "neve") { fill(255, 255, 255, 0.92); rect(-s / 2 - 1, -s / 2 - 2, s + 2, 7, 3); }
     pop();
-  } else { // barril
+  } else {
     fill(14, 12, 6, 0.3); ellipse(o.x + 4, o.y + 7, o.r * 2.4, o.r * 1.7);
     const dano = o.hp < o.hpMax;
     fill(dano ? 190 : 168, 52, 40); stroke(72, 24, 18); strokeWeight(2.5);
@@ -1151,23 +1414,15 @@ function desenharLaminas() {
 
 function desenharJogador() {
   if (estado === "fim") return;
-  const piscar = jogador.inv > 0 && Math.floor(millis() / 90) % 2 === 0;
-  const a = piscar ? 0.45 : 1;
+  const piscar = jogador.inv > 0 && jogador.dashT <= 0 && Math.floor(millis() / 90) % 2 === 0;
+  const a = piscar ? 0.45 : jogador.dashT > 0 ? 0.6 : 1;
   push();
   translate(jogador.x, jogador.y);
   noStroke();
   fill(10, 14, 6, 0.3); ellipse(4, 8, 38, 24);
+  if (rajadaT > 0) { fill(255, 190, 70, 0.18 + Math.sin(millis() * 0.03) * 0.06); circle(0, 0, 66); }
   rotate(jogador.mira);
-  const bob = Math.sin(jogador.passo) * 1.4;
-  fill(92, 70, 44, a); ellipse(-9, 0, 13, 20);                       // mochila
-  fill(66, 88, 60, a); ellipse(-1, bob * 0.3, 20, 32);               // jaqueta
-  fill(88, 114, 78, a); ellipse(-3, -4 + bob * 0.3, 11, 12);         // brilho no ombro
-  fill(48, 50, 54, a); rect(10, -3, 24, 6, 2);                       // arma
-  fill(34, 36, 40, a); rect(30, -2, 9, 4, 1);                        // cano
-  fill(214, 168, 128, a); circle(13, -8 + bob * 0.4, 7); circle(23, 6, 7); // mãos
-  fill(112, 76, 46, a); circle(1, 0, 16);                            // chapéu
-  fill(134, 94, 58, a); circle(0, -1, 11);
-  fill(92, 60, 36, a); ellipse(7, 0, 8, 15);                         // aba
+  desenharCorpo(PA, a, Math.sin(jogador.passo) * 1.4);
   if (jogador.flash > 0) {
     fill(255, 226, 140, 0.95); triangle(39, 0, 52, -6, 52, 6);
     fill(255, 252, 226); circle(41, 0, 6);
@@ -1215,9 +1470,9 @@ function desenharAtmosfera() {
   const ctx = drawingContext;
   ctx.save();
   const g = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.22, width / 2, height / 2, Math.hypot(width, height) * 0.62);
-  g.addColorStop(0, "rgba(255,200,120,0.09)");
-  g.addColorStop(0.55, "rgba(30,20,28,0.08)");
-  g.addColorStop(1, "rgba(14,8,12,0.5)");
+  g.addColorStop(0, BA.luz);
+  g.addColorStop(0.55, BA.meio);
+  g.addColorStop(1, BA.borda);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
@@ -1267,7 +1522,6 @@ function desenharHUD() {
   noStroke();
   rectMode(CORNER);
 
-  // barra de XP
   fill(20, 14, 10, 0.55);
   rect(0, 0, width, 9 * ui);
   fill(230, 178, 60);
@@ -1275,7 +1529,6 @@ function desenharHUD() {
   fill(255, 236, 170, 0.5);
   rect(0, 0, width * constrain(xp / xpProx, 0, 1), 3 * ui);
 
-  // vida
   const bx = 10 * ui, by = 20 * ui, bw = Math.min(150 * ui, width * 0.27), bh = 20 * ui;
   painel(bx, by, bw + 26 * ui, bh + 10 * ui, 10 * ui);
   coracao(bx + 15 * ui, by + 12 * ui, 13 * ui);
@@ -1296,33 +1549,40 @@ function desenharHUD() {
   fill(240, 226, 196);
   text("Nível " + nivel, bx + 4 * ui, by + bh + 16 * ui);
 
-  // onda (centro)
-  const pw = Math.min(130 * ui, width * 0.28), px = width / 2 - pw / 2;
-  painel(px, 20 * ui, pw, 42 * ui, 12 * ui);
+  // onda + progresso do nível
+  const pw = Math.min(150 * ui, width * 0.3), px = width / 2 - pw / 2;
+  const alto = NA.inf ? 42 * ui : 58 * ui;
+  painel(px, 20 * ui, pw, alto, 12 * ui);
   fill(255, 240, 208);
   textAlign(CENTER, CENTER);
   textSize(18 * ui);
-  text(onda > 0 ? "ONDA " + onda : "ONDA 1", px + pw / 2, 20 * ui + 16 * ui);
+  text(NA.inf ? "ONDA " + Math.max(1, onda) : "ONDA " + Math.max(1, onda) + "/" + NA.ondas, px + pw / 2, 20 * ui + 16 * ui);
   textSize(11 * ui);
   fill(214, 190, 150);
   const restam = inimigos.length + aSpawnar;
   text(ondaFase === "pausa" ? "descanse" : "restam " + restam, px + pw / 2, 20 * ui + 32 * ui);
+  if (!NA.inf) {
+    const p = pctNivel(), barW = pw - 20 * ui;
+    fill(0, 0, 0, 0.45); rect(px + 10 * ui, 20 * ui + 41 * ui, barW, 8 * ui, 4 * ui);
+    fill(NA.cor[0], NA.cor[1], NA.cor[2]); if (p > 0) rect(px + 10 * ui, 20 * ui + 41 * ui, Math.max(6 * ui, (barW * p) / 100), 8 * ui, 4 * ui);
+    fill(255, 244, 218);
+    textSize(10 * ui);
+    textAlign(LEFT, CENTER);
+    text(p + "%", px + pw + 6 * ui, 20 * ui + 45 * ui);
+  }
 
-  // abates
   textAlign(RIGHT, TOP);
   textSize(15 * ui);
   fill(240, 226, 196);
   text("Abates: " + abates, width - 12 * ui, 24 * ui);
 
-  // aviso
   if (millis() < aviso.ate) {
     const p = 1 + Math.sin(millis() * 0.02) * 0.05;
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
-    textoContorno(aviso.txt, width / 2, height * 0.24, 34 * ui * p, [255, 238, 200], [40, 24, 14], 6 * ui);
+    textoContorno(aviso.txt, width / 2, height * 0.3, 32 * ui * p, [255, 238, 200], [40, 24, 14], 6 * ui);
   }
 
-  // joystick
   if (estado === "jogando" && joy.ativo) {
     const R = 70 * ui;
     const vx = joy.x - joy.ox, vy = joy.y - joy.oy;
@@ -1335,24 +1595,34 @@ function desenharHUD() {
     noStroke();
     fill(255, 240, 210, 0.38);
     circle(joy.ox + vx * m, joy.oy + vy * m, 56 * ui);
+  } else if ((estado === "jogando" || estado === "pausa") && tempo < 20) { // guia do analógico
+    noFill();
+    stroke(255, 240, 210, 0.16);
+    strokeWeight(3 * ui);
+    circle(width * 0.17, height * 0.7, 140 * ui);
+    noStroke();
+    fill(255, 240, 210, 0.14);
+    circle(width * 0.17, height * 0.7, 56 * ui);
   }
 
-  // dicas no começo
+  desenharBotaoHab();
+
   if (estado === "jogando" && !joy.ativo) {
     let dica = "";
-    if (tempo < 6 && !usouTeclado) dica = "Arraste o dedo para mover.\nA arma atira sozinha!";
-    else if (onda === 1 && ondaFase === "ativa" && tempo < 22) dica = "Atire nos barris vermelhos\npara explodir os bichos!";
+    if (tempo < 7 && !usouTeclado) dica = "Arraste o dedo no lado ESQUERDO para mover.\nA arma atira sozinha!";
+    else if (PA.hab && tempo >= 7 && tempo < 16) dica = "Toque no botão da direita\npara usar: " + PA.habNome;
+    else if (onda === 1 && ondaFase === "ativa" && tempo < 28) dica = "Atire nos barris vermelhos\npara explodir os bichos!";
     if (dica) {
       const al = 0.7 + Math.sin(millis() * 0.006) * 0.25;
       textAlign(CENTER, CENTER);
       textStyle(BOLD);
       push();
-      textSize(19 * ui);
+      textSize(17 * ui);
       stroke(30, 18, 10, al);
       strokeWeight(5 * ui);
       strokeJoin(ROUND);
       fill(255, 240, 206, al);
-      text(dica, width / 2, height * 0.8);
+      text(dica, width / 2, height * 0.82);
       pop();
     }
   }
@@ -1363,38 +1633,50 @@ function desenharTelas() {
   rectMode(CORNER);
   if (estado === "menu") desenharMenu();
   else if (estado === "upgrade") desenharUpgrade();
+  else if (estado === "pausa") desenharPausa();
   else if (estado === "fim") desenharFim();
+  else if (estado === "vitoria") desenharVitoria();
 }
 
 function desenharMenu() {
-  fill(18, 12, 8, 0.38);
+  noStroke();
+  rectMode(CORNER);
+  fill(18, 12, 8, 0.4);
   rect(0, 0, width, height);
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
   push();
   textFont("Georgia, serif");
-  textoContorno("ENXAME", width / 2 + 3 * ui, height * 0.22 + 4 * ui, 66 * ui, [20, 10, 6], [20, 10, 6], 8 * ui);
-  textoContorno("ENXAME", width / 2, height * 0.22, 66 * ui, [250, 236, 200], [70, 38, 18], 8 * ui);
+  const ty = height * 0.1, ts = Math.min(46 * ui, height * 0.12);
+  textoContorno("ENXAME", width / 2 + 2 * ui, ty + 3 * ui, ts, [20, 10, 6], [20, 10, 6], 7 * ui);
+  textoContorno("ENXAME", width / 2, ty, ts, [250, 236, 200], [70, 38, 18], 7 * ui);
   pop();
-  noStroke();
-  fill(226, 176, 60);
-  rect(width / 2 - 60 * ui, height * 0.22 + 44 * ui, 120 * ui, 3 * ui, 2);
-  fill(240, 220, 180);
-  textStyle(NORMAL);
-  textSize(17 * ui);
-  text("SOBREVIVA ÀS ONDAS", width / 2, height * 0.22 + 64 * ui);
-  fill(255, 246, 224, 0.92);
-  textSize(16 * ui);
-  text("Arraste o dedo para mover. A arma atira sozinha.\nUse pedras como proteção e atire\nnos barris vermelhos para explodir os bichos!", width / 2, height * 0.5 + 12 * ui);
-  botaoPulsante("TOQUE PARA JOGAR", height * 0.72, [150, 176, 80]);
-  fill(240, 214, 140);
+  moeda(24 * ui, 28 * ui, 11 * ui);
+  textAlign(LEFT, CENTER);
   textStyle(BOLD);
-  textSize(17 * ui);
-  text("Recorde: " + recorde + " pontos", width / 2, height * 0.835);
+  textSize(19 * ui);
+  fill(250, 220, 130);
+  text(save.moedas, 40 * ui, 29 * ui);
+
+  const C = cartasMenu();
+  desenharCartaPersonagem(C[0]);
+  desenharCartaNivel(C[1]);
+  desenharCartaBioma(C[2]);
+
+  const j = rectJogar(), ok = podeJogar();
+  botao(ok ? "JOGAR" : !possui(save.p) ? "COMPRE O PERSONAGEM" : "NÍVEL BLOQUEADO", j.x, j.y, j.w, j.h, ok ? [150, 176, 80] : [120, 108, 96], ok);
+  noStroke();
+  textAlign(LEFT, CENTER);
+  textStyle(BOLD);
+  textSize(13 * ui);
+  fill(240, 214, 140);
+  text("Recorde ∞: " + save.recorde, 14 * ui, height * 0.9);
   if (CONFIG.mostrarApoio) {
+    const a = rectApoio();
     fill(240, 150, 150);
-    textSize(15 * ui);
-    text("♥ Apoie o criador", width / 2, height * 0.925);
+    textAlign(CENTER, CENTER);
+    textSize(14 * ui);
+    text("♥ Apoie o criador", a.x, a.y);
   }
 }
 
@@ -1455,90 +1737,50 @@ function desenharUpgrade() {
   }
 }
 
-function botoesFim() {
-  const l = [];
-  if (!usouContinuar && tempo >= CONFIG.segundosParaContinuar) {
-    l.push({ id: "continuar", txt: "▶ CONTINUAR (ver anúncio)", cor: [232, 168, 60] });
-  }
-  l.push({ id: "novo", txt: "JOGAR DE NOVO", cor: [150, 176, 80] });
-  if (CONFIG.mostrarApoio) l.push({ id: "apoio", txt: "♥ APOIAR O CRIADOR", cor: [214, 128, 130] });
-  const comp = height < 560;
-  l.forEach((b, i) => (b.y = height * (comp ? 0.5 : 0.6) + i * (comp ? 56 : 62) * ui));
-  return l;
-}
 
 function desenharFim() {
   fill(14, 8, 6, 0.7);
   rect(0, 0, width, height);
+  const comp = height < 560;
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
   push();
   textFont("Georgia, serif");
-  const comp = height < 560;
-  textoContorno("VOCÊ CAIU", width / 2, height * (comp ? 0.12 : 0.16), 48 * ui, [236, 110, 90], [60, 14, 10], 7 * ui);
+  textoContorno("VOCÊ CAIU", width / 2, height * 0.13, 44 * ui, [236, 110, 90], [60, 14, 10], 7 * ui);
   pop();
   fill(255, 244, 218);
-  textSize(21 * ui);
-  text("Chegou até a onda " + Math.max(1, onda) + "   |   Abates: " + abates, width / 2, height * (comp ? 0.23 : 0.26));
-  textSize(30 * ui);
-  fill(250, 220, 130);
-  text(pontuacao() + " pontos", width / 2, height * (comp ? 0.31 : 0.33));
-  fill(novoRecorde ? 150 : 232, novoRecorde ? 206 : 214, novoRecorde ? 90 : 170);
   textSize(19 * ui);
-  text(novoRecorde ? "NOVO RECORDE!" : "Recorde: " + recorde, width / 2, height * (comp ? 0.385 : 0.4));
-  for (const b of botoesFim()) botaoPulsante(b.txt, b.y, b.cor);
-  const bts = botoesFim();
-  const ultimo = bts[bts.length - 1].y;
-  fill(226, 210, 180, 0.92);
-  textStyle(NORMAL);
-  textSize(14 * ui);
-  textAlign(CENTER, TOP);
-  const dw = Math.min(width * 0.86, 400 * ui);
-  text("Dica: " + dicaFim, width / 2 - dw / 2, ultimo + (comp ? 36 : 46) * ui, dw, 60 * ui);
+  text("Onda " + Math.max(1, onda) + "   |   Abates: " + abates, width / 2, height * 0.25);
+  if (NA.inf) {
+    textSize(28 * ui); fill(250, 220, 130);
+    text(pontuacao() + " pontos", width / 2, height * 0.34);
+    fill(novoRecorde ? 150 : 232, novoRecorde ? 206 : 214, novoRecorde ? 90 : 170);
+    textSize(17 * ui);
+    text(novoRecorde ? "NOVO RECORDE!" : "Recorde: " + save.recorde, width / 2, height * 0.42);
+  } else {
+    textSize(26 * ui); fill(NA.cor[0], NA.cor[1], NA.cor[2]);
+    text("Progresso: " + pctFinal + "%", width / 2, height * 0.34);
+    const bw = Math.min(300 * ui, width * 0.5), by = height * 0.405;
+    fill(0, 0, 0, 0.5); rect(width / 2 - bw / 2, by, bw, 10 * ui, 5 * ui);
+    if (pctFinal > 0) { fill(NA.cor[0], NA.cor[1], NA.cor[2]); rect(width / 2 - bw / 2, by, Math.max(8 * ui, (bw * pctFinal) / 100), 10 * ui, 5 * ui); }
+  }
+  if (ganho > 0) desenharMoedasGanhas(height * 0.47);
+  for (const b of botoesTela()) botao(b.txt, b.x, b.y, b.w, b.h, b.cor, b.id === "novo");
+  if (!comp) {
+    const bs = botoesTela(), ult = bs[bs.length - 1].y;
+    fill(226, 210, 180, 0.92); textStyle(NORMAL); textSize(14 * ui); textAlign(CENTER, TOP);
+    const dw = Math.min(width * 0.86, 440 * ui);
+    text("Dica: " + dicaFim, width / 2 - dw / 2, ult + 44 * ui, dw, 50 * ui);
+  }
+  textAlign(CENTER, CENTER);
+  desenharApoioLink();
 }
 
 function botaoPulsante(txt, y, cor) {
-  const s = 1 + Math.sin(frameCount * 0.08) * 0.03;
-  push();
-  translate(width / 2, y);
-  scale(s);
-  rectMode(CENTER);
-  noStroke();
-  fill(20, 12, 6, 0.4);
-  rect(2 * ui, 5 * ui, btnLargura(), 52 * ui, 16 * ui);
-  fill(cor[0], cor[1], cor[2]);
-  stroke(cor[0] * 0.55, cor[1] * 0.55, cor[2] * 0.55);
-  strokeWeight(3 * ui);
-  rect(0, 0, btnLargura(), 52 * ui, 16 * ui);
-  noStroke();
-  fill(255, 255, 255, 0.18);
-  rect(0, -13 * ui, btnLargura() - 12 * ui, 16 * ui, 8 * ui);
-  fill(44, 26, 12);
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD);
-  textSize(18 * ui);
-  text(txt, 0, 2);
-  pop();
+  botao(txt, width / 2, y, btnLargura(), 52 * ui, cor, true);
 }
 
-function btnSom() {
-  return { x: width - 40 * ui, y: estado === "menu" ? 30 * ui : 70 * ui, w: 64 * ui, h: 26 * ui };
-}
 
-function desenharBotaoSom() {
-  const b = btnSom();
-  push();
-  rectMode(CENTER);
-  noStroke();
-  fill(22, 16, 12, 0.6);
-  rect(b.x, b.y, b.w, b.h, b.h / 2);
-  fill(255, 244, 218, somLigado ? 0.95 : 0.5);
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD);
-  textSize(12 * ui);
-  text(somLigado ? "SOM: ON" : "SOM: OFF", b.x, b.y + 1);
-  pop();
-}
 
 function desenharAvisoPix() {
   if (millis() > avisoPix) return;
@@ -1584,39 +1826,37 @@ function acertou(x, y, cx, cy, w, h) {
 
 function apertou(x, y, id) {
   iniciarAudio();
-  const sb = btnSom();
+  if (precisaGirar()) return;
+  const agora = millis();
 
-  if (estado === "jogando") {
-    if (acertou(x, y, sb.x, sb.y, sb.w + 12, sb.h + 12)) {
-      if (millis() - ultimoClique > 200) { ultimoClique = millis(); alternarSom(); }
+  for (const b of botoesTopo()) {
+    if (acertou(x, y, b.x, b.y, b.w + 8, b.h + 10)) {
+      if (agora - ultimoClique > 200) { ultimoClique = agora; acaoTopo(b.id); }
       return;
     }
-    if (!joy.ativo) joy = { ativo: true, id, ox: x, oy: y, x, y };
+  }
+
+  if (estado === "jogando") {
+    const h = btnHab();
+    if (PA.hab && Math.hypot(x - h.x, y - h.y) < h.r * 1.35) { usarHabilidade(); return; }
+    if (!joy.ativo && (id === "mouse" || x < width * 0.58)) joy = { ativo: true, id, ox: x, oy: y, x, y };
     return;
   }
 
-  if (millis() - ultimoClique < 200) return;
-  ultimoClique = millis();
+  if (agora - ultimoClique < 200) return;
+  ultimoClique = agora;
 
-  if (acertou(x, y, sb.x, sb.y, sb.w + 12, sb.h + 12)) { alternarSom(); return; }
-
-  if (estado === "menu") {
-    if (CONFIG.mostrarApoio && acertou(x, y, width / 2, height * 0.925, 240 * ui, 44 * ui)) abrirApoio();
-    else novaPartida();
-  } else if (estado === "upgrade") {
+  if (estado === "menu") cliqueMenu(x, y);
+  else if (estado === "upgrade") {
     const L = layoutCartas();
     for (let i = 0; i < L.length; i++) {
       if (acertou(x, y, L[i].x, L[i].y, L[i].w, L[i].h)) { escolher(i); return; }
     }
-  } else if (estado === "fim") {
-    for (const b of botoesFim()) {
-      if (acertou(x, y, width / 2, b.y, btnLargura(), 52 * ui)) {
-        if (b.id === "continuar") mostrarAnuncio("recompensado", continuarPartida);
-        else if (b.id === "novo") jogarDeNovo();
-        else abrirApoio();
-        return;
-      }
+  } else if (estado === "pausa" || estado === "fim" || estado === "vitoria") {
+    for (const b of botoesTela()) {
+      if (acertou(x, y, b.x, b.y, b.w, b.h)) { acaoBotao(b.id); return; }
     }
+    if (CONFIG.mostrarApoio && acertou(x, y, width / 2, height * 0.93, 240 * ui, 36 * ui)) abrirApoio();
   }
 }
 
@@ -1624,7 +1864,6 @@ function moveu(x, y, id) {
   if (!joy.ativo || joy.id !== id) return;
   joy.x = x;
   joy.y = y;
-  // joystick "flutuante": a base acompanha o dedo se ele se afastar demais
   const R = 70 * ui;
   const vx = x - joy.ox, vy = y - joy.oy;
   const d = Math.hypot(vx, vy);
@@ -1662,6 +1901,7 @@ function touchEnded() {
       soltou(Number(id));
     }
   }
+  tentarTelaCheia();
   return false;
 }
 
@@ -1676,7 +1916,778 @@ function keyPressed() {
     if (i >= 0 && i < opcoes.length) escolher(i);
     return false;
   }
-  if (estado === "menu" && (key === " " || keyCode === ENTER)) { novaPartida(); return false; }
-  if (estado === "fim" && keyCode === ENTER) { jogarDeNovo(); return false; }
-  if (key === " ") return false; // evita rolar a página
+  if (estado === "jogando") {
+    if (key === " " || key === "e" || key === "E" || keyCode === SHIFT) { usarHabilidade(); return false; }
+    if (key === "p" || key === "P" || keyCode === ESCAPE) { pausar(); return false; }
+  } else if (estado === "pausa") {
+    if (key === "p" || key === "P" || keyCode === ESCAPE || keyCode === ENTER) { estado = "jogando"; return false; }
+  } else if (estado === "menu") {
+    if (keyCode === LEFT_ARROW) { trocar(colMenu, -1); return false; }
+    if (keyCode === RIGHT_ARROW) { trocar(colMenu, 1); return false; }
+    if (keyCode === UP_ARROW) { colMenu = (colMenu + 2) % 3; return false; }
+    if (keyCode === DOWN_ARROW) { colMenu = (colMenu + 1) % 3; return false; }
+    if (key === " " || keyCode === ENTER) { novaPartida(); return false; }
+  } else if ((estado === "fim" || estado === "vitoria") && keyCode === ENTER) {
+    if (estado === "vitoria") acaoBotao("proximo"); else jogarDeNovo();
+    return false;
+  }
+  if (key === " ") return false;
+}
+
+function carregar() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem("enxameSave3");
+    somLigado = localStorage.getItem("enxameSom") !== "0";
+  } catch (e) {}
+  if (raw) {
+    try { const s = JSON.parse(raw); if (s && typeof s === "object") Object.assign(save, s); } catch (e) {}
+  } else {
+    save.moedas = CONFIG.moedasIniciais;
+    try { save.recorde = parseInt(localStorage.getItem("enxameRecorde2")) || 0; } catch (e) {}
+  }
+  if (!Array.isArray(save.donos)) save.donos = ["soldado"];
+  if (!save.niveis || typeof save.niveis !== "object") save.niveis = {};
+  save.p = constrain(save.p | 0, 0, PERSONAGENS.length - 1);
+  save.n = constrain(save.n | 0, 0, NIVEIS.length - 1);
+  save.b = constrain(save.b | 0, 0, BIOMAS.length - 1);
+  save.moedas = Math.max(0, save.moedas | 0);
+  save.recorde = Math.max(0, save.recorde | 0);
+  if (!possui(save.p)) save.p = 0;
+  if (!nivelLiberado(save.n)) save.n = 0;
+}
+
+function salvar() {
+  try { localStorage.setItem("enxameSave3", JSON.stringify(save)); } catch (e) {}
+}
+
+function possui(i) {
+  return CONFIG.desbloquearTudo || save.donos.includes(PERSONAGENS[i].id);
+}
+
+function nivelLiberado(i) {
+  return CONFIG.desbloquearTudo || !!NIVEIS[i].inf || i === 0 || !!(save.niveis[i - 1] && save.niveis[i - 1].completo);
+}
+
+function podeJogar() {
+  return possui(save.p) && nivelLiberado(save.n);
+}
+
+function aplicarSelecao() {
+  PA = PERSONAGENS[save.p];
+  NA = NIVEIS[save.n];
+  BA = BIOMAS[save.b];
+  tileImg = tileDe(BA);
+  habMax = PA.cd || 1;
+}
+
+function trocar(col, dir) {
+  const tam = [PERSONAGENS.length, NIVEIS.length, BIOMAS.length][col];
+  const k = ["p", "n", "b"][col];
+  save[k] = (save[k] + dir + tam) % tam;
+  aplicarSelecao();
+  if (col === 2) { resetarMundo(); iniciarMenuBichos(); }
+  salvar();
+}
+
+function comprar() {
+  const P = PERSONAGENS[save.p];
+  if (possui(save.p) || save.moedas < P.preco) return;
+  save.moedas -= P.preco;
+  save.donos.push(P.id);
+  salvar();
+  tocar("nivel");
+}
+
+function irParaMenu() {
+  estado = "menu";
+  joy.ativo = false;
+  resetarMundo();
+  iniciarMenuBichos();
+}
+
+function pausar() {
+  if (estado === "jogando") { estado = "pausa"; joy.ativo = false; }
+}
+
+function tileDe(bio) {
+  if (!tiles[bio.id]) tiles[bio.id] = criarTile(bio);
+  return tiles[bio.id];
+}
+
+function ehToque() {
+  try { return "ontouchstart" in window || navigator.maxTouchPoints > 0; } catch (e) { return false; }
+}
+
+function precisaGirar() {
+  return ehToque() && height > width * 1.05;
+}
+
+function atualizarFlocos(dt) {
+  if (BA.id !== "neve") return;
+  if (!flocos.length) for (let i = 0; i < 70; i++) flocos.push({ x: random(), y: random(), v: 30 + random(40), s: 1.5 + random(2.5), f: random(6) });
+  for (const f of flocos) {
+    f.y += (f.v * dt) / Math.max(200, height);
+    f.f += dt;
+    f.x += (Math.sin(f.f) * 12 * dt) / Math.max(300, width);
+    if (f.y > 1) { f.y = -0.02; f.x = random(); }
+  }
+}
+
+function usarHabilidade() {
+  if (estado !== "jogando" || !PA.hab || habCd > 0) return;
+  habCd = habMax = PA.cd;
+  const h = PA.hab;
+  if (h === "dash") {
+    const [dx, dy] = direcaoMov();
+    jogador.dashDir = dx || dy ? Math.atan2(dy, dx) : jogador.dir;
+    jogador.dashT = 0.2;
+    jogador.inv = Math.max(jogador.inv, 0.5);
+    tocar("dash");
+  } else if (h === "granada") {
+    let alvo = null, melhor = 420 * 420;
+    for (const e of inimigos) {
+      if (e.morto) continue;
+      const d2 = (e.x - jogador.x) ** 2 + (e.y - jogador.y) ** 2;
+      if (d2 < melhor) { melhor = d2; alvo = e; }
+    }
+    const tx = alvo ? alvo.x : jogador.x + Math.cos(jogador.mira) * 220;
+    const ty = alvo ? alvo.y : jogador.y + Math.sin(jogador.mira) * 220;
+    granadas.push({ sx: jogador.x, sy: jogador.y, tx, ty, x: jogador.x, y: jogador.y, t: 0, dur: 0.6 });
+    tocar("granada");
+  } else if (h === "cura") {
+    const q = st.hpMax * 0.45;
+    st.hp = Math.min(st.hpMax, st.hp + q);
+    jogador.inv = Math.max(jogador.inv, 1);
+    textos.push({ x: jogador.x, y: jogador.y - 24, txt: "+" + Math.round(q) + " vida", vida: 1 });
+    explosaoCor(jogador.x, jogador.y, [140, 220, 140], 22);
+    tocar("cura");
+  } else if (h === "torreta") {
+    torretas = [{ x: jogador.x + Math.cos(jogador.dir) * 34, y: jogador.y + Math.sin(jogador.dir) * 34, vida: 10, cd: 0.3, ang: jogador.dir }];
+    poeira(torretas[0].x, torretas[0].y, [210, 190, 90], 10);
+    tocar("torreta");
+  } else if (h === "rajada") {
+    rajadaT = 4;
+    tocar("rajada");
+  }
+}
+
+function atualizarTorretas(dt) {
+  for (const t of torretas) {
+    t.vida -= dt;
+    t.cd -= dt;
+    let alvo = null, melhor = 330 * 330;
+    for (const e of inimigos) {
+      if (e.morto || e.idade < 0.2) continue;
+      const d2 = (e.x - t.x) ** 2 + (e.y - t.y) ** 2;
+      if (d2 < melhor) { melhor = d2; alvo = e; }
+    }
+    if (!alvo) continue;
+    t.ang = girar(t.ang, Math.atan2(alvo.y - t.y, alvo.x - t.x), 14 * dt);
+    if (t.cd <= 0) {
+      t.cd = 0.32;
+      tiros.push({ x: t.x + Math.cos(t.ang) * 22, y: t.y + Math.sin(t.ang) * 22, vx: Math.cos(t.ang) * 560, vy: Math.sin(t.ang) * 560, vida: 0.7, perf: 0, hits: [], dano: st.dano * 0.8 });
+    }
+  }
+  torretas = torretas.filter((t) => t.vida > 0);
+}
+
+function atualizarGranadas(dt) {
+  for (const g of granadas) {
+    g.t += dt;
+    const k = Math.min(1, g.t / g.dur);
+    g.x = g.sx + (g.tx - g.sx) * k;
+    g.y = g.sy + (g.ty - g.sy) * k;
+    g.h = Math.sin(Math.PI * k) * 46;
+    if (g.t >= g.dur) { g.fim = true; explosaoGrande(g.tx, g.ty, true, 150); }
+  }
+  granadas = granadas.filter((g) => !g.fim);
+}
+
+function ondaEf() {
+  return 1 + (onda - 1) * NA.rampa;
+}
+
+function ondaDeChefe(n) {
+  return n % 5 === 0 || (!NA.inf && n === NA.ondas);
+}
+
+function pctNivel() {
+  if (NA.inf) return 0;
+  const feitas = ondaFase === "ativa" ? onda - 1 : onda;
+  const resta = aSpawnar + inimigos.length;
+  const frac = ondaFase === "ativa" ? Math.max(0, 1 - resta / Math.max(1, ondaTotalInim)) : 0;
+  return Math.min(100, Math.floor((100 * (feitas + frac)) / NA.ondas));
+}
+
+function moedasDaPartida() {
+  return Math.floor(abates / 6) + Math.max(0, onda - (estado === "vitoria" ? 0 : 1)) * 4;
+}
+
+function vitoria() {
+  estado = "vitoria";
+  tempoFim = 0;
+  partidas++;
+  joy.ativo = false;
+  aviso.ate = 0;
+  const f = st.hp / st.hpMax;
+  estrelasGanhas = f >= 0.6 ? 3 : f >= 0.3 ? 2 : 1;
+  const r = save.niveis[save.n] || (save.niveis[save.n] = { pct: 0, completo: false, estrelas: 0 });
+  primeiraVez = !r.completo;
+  ganho = moedasDaPartida() + Math.round(NA.bonus * (primeiraVez ? 1 : 0.5));
+  save.moedas += ganho;
+  r.completo = true;
+  r.pct = 100;
+  r.estrelas = Math.max(r.estrelas || 0, estrelasGanhas);
+  salvar();
+  explosaoCor(jogador.x, jogador.y, [250, 220, 120], 40);
+  tocar("nivel");
+}
+
+function dobrarMoedas() {
+  if (dobrou || ganho <= 0) return;
+  dobrou = true;
+  save.moedas += ganho;
+  ganho *= 2;
+  salvar();
+  tocar("nivel");
+}
+
+function desenharTorretas() {
+  for (const t of torretas) {
+    push();
+    translate(t.x, t.y);
+    noStroke();
+    fill(10, 8, 4, 0.3); ellipse(4, 7, 34, 20);
+    fill(92, 96, 104); stroke(44, 48, 56); strokeWeight(2.5); circle(0, 0, 26);
+    noStroke(); fill(130, 136, 146); circle(-2, -2, 18);
+    rotate(t.ang);
+    fill(54, 58, 66); rect(4, -4, 22, 8, 2);
+    fill(30, 32, 38); rect(22, -3, 7, 6, 1);
+    rotate(-t.ang);
+    noFill(); stroke(255, 220, 120, 0.8); strokeWeight(2.5);
+    arc(0, 0, 36, 36, -HALF_PI, -HALF_PI + TWO_PI * Math.max(0, t.vida / 10));
+    pop();
+  }
+}
+
+function desenharGranadas() {
+  for (const g of granadas) {
+    noStroke();
+    fill(10, 8, 4, 0.3); ellipse(g.x + 2, g.y + 4, 14, 7);
+    fill(52, 56, 48); stroke(24, 26, 22); strokeWeight(1.5);
+    circle(g.x, g.y - g.h, 13);
+    noStroke(); fill(230, 150, 50); circle(g.x + 1, g.y - g.h - 7, 4);
+    fill(255, 255, 255, 0.4); circle(g.x - 2, g.y - g.h - 2, 4);
+  }
+}
+
+function desenharCorpo(P, a, bob) {
+  const c = P.cor;
+  noStroke();
+  fill(c.moc[0], c.moc[1], c.moc[2], a); ellipse(-9, 0, 13, 20);
+  fill(c.jaq[0], c.jaq[1], c.jaq[2], a); ellipse(-1, bob * 0.3, 20, 32);
+  fill(c.br[0], c.br[1], c.br[2], a); ellipse(-3, -4 + bob * 0.3, 11, 12);
+  if (P.marca === "cruz") { fill(214, 60, 64, a); rect(-6, -1.5, 8, 3); rect(-3.5, -4, 3, 8); }
+  fill(48, 50, 54, a); rect(10, -3, 24, 6, 2);
+  fill(34, 36, 40, a); rect(30, -2, 9, 4, 1);
+  fill(214, 168, 128, a); circle(13, -8 + bob * 0.4, 7); circle(23, 6, 7);
+  fill(c.cha[0], c.cha[1], c.cha[2], a); circle(1, 0, 16);
+  fill(c.cha2[0], c.cha2[1], c.cha2[2], a); circle(0, -1, 11);
+  fill(c.aba[0], c.aba[1], c.aba[2], a); ellipse(7, 0, 8, 15);
+}
+
+function desenharFlocos() {
+  if (BA.id !== "neve") return;
+  noStroke();
+  fill(255, 255, 255, 0.8);
+  for (const f of flocos) circle(f.x * width, f.y * height, f.s * ui);
+}
+
+function estrela(x, y, s, cheia) {
+  push();
+  if (cheia) { fill(252, 206, 62); stroke(150, 96, 20); } else { fill(60, 50, 44, 0.9); stroke(110, 98, 86); }
+  strokeWeight(Math.max(1.5, s * 0.1));
+  strokeJoin(ROUND);
+  beginShape();
+  for (let i = 0; i < 10; i++) {
+    const a = -HALF_PI + (i * Math.PI) / 5, r = i % 2 === 0 ? s : s * 0.45;
+    vertex(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  endShape(CLOSE);
+  if (cheia) { noStroke(); fill(255, 244, 180, 0.8); circle(x - s * 0.2, y - s * 0.25, s * 0.35); }
+  pop();
+}
+
+function moeda(x, y, s) {
+  push();
+  fill(244, 192, 52); stroke(150, 98, 20); strokeWeight(Math.max(1.5, s * 0.16));
+  circle(x, y, s * 2);
+  noFill(); stroke(255, 226, 120, 0.9); strokeWeight(Math.max(1, s * 0.12));
+  circle(x, y, s * 1.2);
+  noStroke(); fill(255, 246, 190, 0.8); circle(x - s * 0.35, y - s * 0.4, s * 0.4);
+  pop();
+}
+
+function cadeado(x, y, s) {
+  push();
+  noFill(); stroke(214, 206, 190); strokeWeight(s * 0.2);
+  arc(x, y - s * 0.15, s * 0.9, s * 1.1, Math.PI, TWO_PI);
+  line(x - s * 0.45, y - s * 0.15, x - s * 0.45, y + s * 0.1);
+  line(x + s * 0.45, y - s * 0.15, x + s * 0.45, y + s * 0.1);
+  noStroke(); fill(236, 196, 70); rect(x - s * 0.7, y + s * 0.05, s * 1.4, s * 1.0, s * 0.18);
+  fill(80, 56, 20); circle(x, y + s * 0.45, s * 0.28); rect(x - s * 0.06, y + s * 0.45, s * 0.12, s * 0.3);
+  pop();
+}
+
+function desenharRosto(x, y, s, tier, cor) {
+  push();
+  noStroke();
+  if (tier === 5) { // chifres
+    fill(cor[0] * 0.6, cor[1] * 0.5, cor[2] * 0.7);
+    triangle(x - s * 0.8, y - s * 0.35, x - s * 0.5, y - s * 1.25, x - s * 0.15, y - s * 0.8);
+    triangle(x + s * 0.8, y - s * 0.35, x + s * 0.5, y - s * 1.25, x + s * 0.15, y - s * 0.8);
+  }
+  fill(cor[0], cor[1], cor[2]); stroke(cor[0] * 0.5, cor[1] * 0.5, cor[2] * 0.5); strokeWeight(Math.max(2, s * 0.1));
+  circle(x, y, s * 2);
+  noStroke(); fill(255, 255, 255, 0.28); ellipse(x - s * 0.3, y - s * 0.5, s * 0.8, s * 0.4);
+  fill(255); circle(x - s * 0.35, y - s * 0.18, s * 0.5); circle(x + s * 0.35, y - s * 0.18, s * 0.5);
+  fill(30, 20, 20);
+  const dy = tier >= 3 ? s * 0.04 : 0;
+  circle(x - s * 0.35, y - s * 0.16 + dy, s * 0.24); circle(x + s * 0.35, y - s * 0.16 + dy, s * 0.24);
+  stroke(30, 20, 20); strokeWeight(Math.max(2, s * 0.11)); noFill();
+  if (tier <= 1) arc(x, y + s * 0.2, s * 0.9, s * 0.65, 0.25, Math.PI - 0.25);
+  else if (tier === 2) line(x - s * 0.35, y + s * 0.5, x + s * 0.35, y + s * 0.5);
+  else arc(x, y + s * 0.75, s * 0.9, s * 0.6, Math.PI + 0.3, TWO_PI - 0.3);
+  if (tier >= 3) { // sobrancelhas bravas
+    line(x - s * 0.62, y - s * 0.62, x - s * 0.1, y - s * 0.4);
+    line(x + s * 0.62, y - s * 0.62, x + s * 0.1, y - s * 0.4);
+  }
+  pop();
+}
+
+function iconeHab(id, x, y, s) {
+  push();
+  noStroke();
+  fill(255, 248, 226);
+  stroke(255, 248, 226); strokeWeight(s * 0.13); strokeCap(ROUND); strokeJoin(ROUND);
+  if (id === "dash") {
+    noFill();
+    for (let i = 0; i < 2; i++) { const ox = (i - 0.5) * s * 0.7; line(x + ox - s * 0.2, y - s * 0.4, x + ox + s * 0.2, y); line(x + ox + s * 0.2, y, x + ox - s * 0.2, y + s * 0.4); }
+  } else if (id === "granada") {
+    noStroke(); circle(x, y + s * 0.12, s * 0.85);
+    fill(255, 190, 70); rect(x - s * 0.1, y - s * 0.52, s * 0.2, s * 0.22, 2);
+  } else if (id === "cura") {
+    noStroke(); fill(120, 230, 130);
+    rect(x - s * 0.16, y - s * 0.46, s * 0.32, s * 0.92, 2); rect(x - s * 0.46, y - s * 0.16, s * 0.92, s * 0.32, 2);
+  } else if (id === "torreta") {
+    noFill(); circle(x - s * 0.08, y + s * 0.05, s * 0.8);
+    line(x + s * 0.2, y - s * 0.12, x + s * 0.6, y - s * 0.32);
+  } else {
+    noFill();
+    for (let i = -1; i <= 1; i++) line(x - s * 0.5, y + i * s * 0.3, x + s * 0.5, y + i * s * 0.3 - s * 0.12);
+  }
+  pop();
+}
+
+function btnHab() {
+  return { x: width - 76 * ui, y: height - 76 * ui, r: 44 * ui };
+}
+
+function desenharBotaoHab() {
+  if (!PA.hab || estado === "fim" || estado === "vitoria") return;
+  const b = btnHab(), pronto = habCd <= 0;
+  const cor = PA.cor.jaq.map((v, i) => Math.min(255, v * 0.6 + [60, 70, 40][i]));
+  push();
+  noStroke();
+  fill(10, 6, 4, 0.4); circle(b.x + 3 * ui, b.y + 5 * ui, b.r * 2);
+  if (pronto) { fill(255, 230, 140, 0.2 + Math.sin(millis() * 0.006) * 0.1); circle(b.x, b.y, b.r * 2 + 14 * ui); }
+  fill(34, 26, 20, 0.85); stroke(pronto ? 240 : 150, pronto ? 200 : 130, pronto ? 100 : 100); strokeWeight(3.5 * ui);
+  circle(b.x, b.y, b.r * 2);
+  noStroke();
+  fill(cor[0], cor[1], cor[2], pronto ? 0.95 : 0.4);
+  circle(b.x, b.y, b.r * 1.6);
+  if (!pronto) {
+    fill(10, 6, 4, 0.6);
+    arc(b.x, b.y, b.r * 1.7, b.r * 1.7, -HALF_PI, -HALF_PI + TWO_PI * (habCd / habMax), PIE);
+  }
+  iconeHab(PA.hab, b.x, b.y, b.r * 0.9);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  if (!pronto) {
+    textoContorno(Math.ceil(habCd) + "", b.x, b.y, 22 * ui, [255, 244, 218], [30, 18, 10], 4 * ui);
+  }
+  textoContorno(PA.habNome, b.x, b.y - b.r - 10 * ui, 12 * ui, [255, 240, 206], [30, 18, 10], 3.5 * ui);
+  pop();
+}
+
+function desenharGire() {
+  push();
+  rectMode(CORNER);
+  noStroke();
+  fill(14, 10, 8, 0.94);
+  rect(0, 0, width, height);
+  const t = (millis() % 2400) / 2400;
+  const ang = (t < 0.5 ? 0 : t < 0.7 ? ((t - 0.5) / 0.2) * HALF_PI : HALF_PI);
+  translate(width / 2, height * 0.4);
+  rotate(ang);
+  const s = Math.min(width, height) * 0.22;
+  fill(40, 34, 30); stroke(240, 214, 150); strokeWeight(4);
+  rect(-s * 0.5, -s * 0.9, s, s * 1.8, s * 0.14);
+  noStroke(); fill(70, 90, 56);
+  rect(-s * 0.4, -s * 0.74, s * 0.8, s * 1.44, s * 0.06);
+  pop();
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textoContorno("Gire o celular", width / 2, height * 0.7, Math.min(width * 0.09, 40), [255, 238, 200], [40, 24, 14], 6);
+  fill(226, 210, 180);
+  textStyle(NORMAL);
+  textSize(Math.min(width * 0.05, 20));
+  text("Este jogo é jogado deitado", width / 2, height * 0.7 + Math.min(width * 0.09, 40) * 1.1);
+}
+
+function telaCheiaDisponivel() {
+  try { return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled); } catch (e) { return false; }
+}
+
+function botoesTopo() {
+  const w = 96 * ui, h = 28 * ui, x = width - w / 2 - 10 * ui;
+  const hud = estado === "jogando" || estado === "pausa" || estado === "upgrade";
+  const y0 = hud ? 66 * ui : 26 * ui;
+  const l = [{ id: "som", x, y: y0, w, h, txt: somLigado ? "SOM: ON" : "SOM: OFF", off: !somLigado }];
+  if (estado === "jogando") l.push({ id: "pausa", x, y: y0 + 34 * ui, w, h, txt: "PAUSA" });
+  if ((estado === "menu" || estado === "pausa") && telaCheiaDisponivel()) l.push({ id: "tela", x, y: y0 + 34 * ui, w, h, txt: "TELA CHEIA" });
+  return l;
+}
+
+function desenharBotoesTopo() {
+  push();
+  rectMode(CENTER);
+  for (const b of botoesTopo()) {
+    noStroke();
+    fill(22, 16, 12, 0.62);
+    rect(b.x, b.y, b.w, b.h, b.h / 2);
+    fill(255, 244, 218, b.off ? 0.5 : 0.95);
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    textSize(12 * ui);
+    text(b.txt, b.x, b.y + 1);
+  }
+  pop();
+}
+
+function acaoTopo(id) {
+  if (id === "som") alternarSom();
+  else if (id === "pausa") pausar();
+  else if (id === "tela") alternarTelaCheia();
+}
+
+function alternarTelaCheia() {
+  try {
+    const el = document.documentElement;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      const f = el.requestFullscreen || el.webkitRequestFullscreen;
+      const p = f.call(el);
+      const travar = () => { try { screen.orientation.lock("landscape").catch(() => {}); } catch (e) {} };
+      if (p && p.then) p.then(travar).catch(() => {}); else travar();
+    }
+  } catch (e) {}
+}
+
+function tentarTelaCheia() {
+  if (tentouTela || !ehToque() || !telaCheiaDisponivel()) return;
+  tentouTela = true;
+  alternarTelaCheia();
+}
+
+function cartasMenu() {
+  const h = height * 0.58, w = Math.min(width * 0.31, 330 * ui), gap = Math.min(14 * ui, width * 0.015);
+  const x0 = width / 2 - (3 * w + 2 * gap) / 2, y0 = height * 0.2;
+  return [0, 1, 2].map((i) => ({ x: x0 + i * (w + gap), y: y0, w, h }));
+}
+
+function unidade(c) {
+  return Math.min(c.w / 270, c.h / 226);
+}
+
+function rectJogar() {
+  return { x: width / 2, y: height * 0.9, w: Math.min(300 * ui, width * 0.45), h: 48 * ui };
+}
+
+function rectApoio() {
+  return { x: width - 95 * ui, y: height * 0.9, w: 170 * ui, h: 40 * ui };
+}
+
+function botaoComprar(c) {
+  const u = unidade(c);
+  return { x: c.x + c.w / 2, y: c.y + c.h - 24 * u, w: 160 * u, h: 30 * u };
+}
+
+function cartaBase(c, rotulo, cor, ativa) {
+  const u = unidade(c);
+  noStroke();
+  fill(14, 8, 4, 0.4);
+  rect(c.x + 4 * u, c.y + 6 * u, c.w, c.h, 16 * u);
+  fill(40, 30, 22, 0.94);
+  stroke(cor[0], cor[1], cor[2], ativa ? 1 : 0.7);
+  strokeWeight((ativa ? 3.5 : 2.5) * u);
+  rect(c.x, c.y, c.w, c.h, 16 * u);
+  noStroke();
+  fill(cor[0], cor[1], cor[2]);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textSize(12 * u);
+  text(rotulo, c.x + c.w / 2, c.y + 16 * u);
+  fill(255, 240, 210, 0.9);
+  const ay = c.y + c.h * 0.4;
+  triangle(c.x + 9 * u, ay, c.x + 23 * u, ay - 12 * u, c.x + 23 * u, ay + 12 * u);
+  triangle(c.x + c.w - 9 * u, ay, c.x + c.w - 23 * u, ay - 12 * u, c.x + c.w - 23 * u, ay + 12 * u);
+  return u;
+}
+
+function desenharCartaPersonagem(c) {
+  const P = PERSONAGENS[save.p], dono = possui(save.p), cx = c.x + c.w / 2;
+  const u = cartaBase(c, "PERSONAGEM", [226, 176, 60], colMenu === 0);
+  push();
+  translate(cx - 6 * u, c.y + 62 * u);
+  scale(1.7 * u);
+  rotate(-0.35);
+  desenharCorpo(P, dono ? 1 : 0.4, 0);
+  pop();
+  if (!dono) cadeado(cx, c.y + 62 * u, 13 * u);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  fill(255, 244, 218);
+  textSize(18 * u);
+  text(P.nome, cx, c.y + 110 * u);
+  textStyle(NORMAL);
+  if (P.hab) {
+    fill(240, 200, 100); textStyle(BOLD); textSize(12 * u);
+    text("Habilidade: " + P.habNome, cx, c.y + 130 * u);
+  }
+  textStyle(NORMAL);
+  fill(226, 210, 180);
+  textSize(11 * u);
+  textLeading(13 * u);
+  text(P.desc, cx, c.y + (P.hab ? 158 : 146) * u);
+  if (!dono) {
+    const b = botaoComprar(c), ok = save.moedas >= P.preco;
+    rectMode(CENTER);
+    fill(ok ? 150 : 90, ok ? 176 : 84, ok ? 80 : 76); stroke(40, 30, 20); strokeWeight(2 * u);
+    rect(b.x, b.y, b.w, b.h, 10 * u);
+    rectMode(CORNER);
+    noStroke();
+    moeda(b.x - 42 * u, b.y, 8 * u);
+    fill(ok ? 40 : 200, ok ? 26 : 190, ok ? 12 : 180);
+    textStyle(BOLD); textSize(14 * u); textAlign(LEFT, CENTER);
+    text("COMPRAR  " + P.preco, b.x - 28 * u, b.y + 1);
+  } else if (P.hab) {
+    fill(150, 200, 110); textAlign(CENTER, CENTER); textStyle(BOLD); textSize(11 * u);
+    text("✔ DESBLOQUEADO", cx, c.y + c.h - 16 * u);
+  }
+}
+
+function desenharCartaNivel(c) {
+  const N = NIVEIS[save.n], lib = nivelLiberado(save.n), cx = c.x + c.w / 2;
+  const u = cartaBase(c, N.inf ? "MODO" : "NÍVEL " + (save.n + 1), N.cor, colMenu === 1);
+  const r = save.niveis[save.n] || { pct: 0, estrelas: 0, completo: false };
+  if (N.inf) {
+    textAlign(CENTER, CENTER); textStyle(BOLD);
+    textoContorno("∞", cx, c.y + 60 * u, 62 * u, [250, 220, 130], [90, 56, 18], 5 * u);
+  } else desenharRosto(cx, c.y + 58 * u, 26 * u, N.tier, lib ? N.cor : [110, 104, 100]);
+  if (!lib) cadeado(cx, c.y + 58 * u, 13 * u);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  fill(255, 244, 218);
+  textSize(16 * u);
+  text(N.nome, cx, c.y + 104 * u);
+  fill(N.cor[0], N.cor[1], N.cor[2]);
+  textSize(13 * u);
+  text(N.dif, cx, c.y + 124 * u);
+  if (N.inf) {
+    fill(240, 214, 140); textSize(14 * u);
+    text("Recorde: " + save.recorde, cx, c.y + 156 * u);
+    fill(226, 210, 180); textStyle(NORMAL); textSize(11 * u);
+    text("Sobreviva o máximo que puder", cx, c.y + 182 * u);
+  } else if (!lib) {
+    fill(226, 210, 180); textStyle(NORMAL); textSize(12 * u);
+    text("Complete o nível " + save.n + "\npara desbloquear", cx, c.y + 168 * u);
+  } else {
+    for (let i = 0; i < 3; i++) estrela(cx + (i - 1) * 30 * u, c.y + 148 * u, 11 * u, i < (r.estrelas || 0));
+    const bw = c.w * 0.62, by = c.y + 184 * u;
+    fill(0, 0, 0, 0.45); rect(cx - bw / 2, by, bw, 10 * u, 5 * u);
+    if (r.pct > 0) { fill(N.cor[0], N.cor[1], N.cor[2]); rect(cx - bw / 2, by, Math.max(8 * u, (bw * r.pct) / 100), 10 * u, 5 * u); }
+    fill(226, 210, 180); textStyle(NORMAL); textSize(11 * u);
+    text("Melhor: " + (r.pct || 0) + "%    ·    " + N.ondas + " ondas", cx, by + 20 * u);
+  }
+}
+
+function desenharCartaBioma(c) {
+  const B = BIOMAS[save.b], cx = c.x + c.w / 2;
+  const u = cartaBase(c, "BIOMA", [110, 190, 130], colMenu === 2);
+  const pw = c.w - 76 * u, ph = 74 * u, px = cx - pw / 2, py = c.y + 28 * u;
+  const img = tileDe(B);
+  image(img, px, py, pw, ph, 40, 40, 300, 300 * (ph / pw));
+  noFill(); stroke(20, 12, 6, 0.8); strokeWeight(2 * u); rect(px, py, pw, ph, 6 * u);
+  noStroke();
+  const ac = B.id === "floresta" ? [48, 88, 46] : B.id === "savana" ? [104, 122, 52] : B.id === "deserto" ? [66, 134, 76] : [36, 84, 66];
+  fill(ac[0], ac[1], ac[2]); circle(px + pw * 0.28, py + ph * 0.55, 20 * u);
+  fill(B.rocha.f[0], B.rocha.f[1], B.rocha.f[2]); ellipse(px + pw * 0.7, py + ph * 0.5, 22 * u, 16 * u);
+  fill(168, 52, 40); circle(px + pw * 0.5, py + ph * 0.75, 11 * u);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  fill(255, 244, 218);
+  textSize(18 * u);
+  text(B.nome, cx, c.y + 122 * u);
+  textStyle(NORMAL);
+  fill(226, 210, 180);
+  textSize(11.5 * u);
+  textLeading(14 * u);
+  text(B.desc, cx, c.y + 156 * u);
+}
+
+function botao(txt, x, y, w, h, cor, pulsa) {
+  const s = pulsa ? 1 + Math.sin(frameCount * 0.08) * 0.03 : 1;
+  push();
+  translate(x, y);
+  scale(s);
+  rectMode(CENTER);
+  noStroke();
+  fill(20, 12, 6, 0.4);
+  rect(2 * ui, 5 * ui, w, h, 16 * ui);
+  fill(cor[0], cor[1], cor[2]);
+  stroke(cor[0] * 0.55, cor[1] * 0.55, cor[2] * 0.55);
+  strokeWeight(3 * ui);
+  rect(0, 0, w, h, 16 * ui);
+  noStroke();
+  fill(255, 255, 255, 0.18);
+  rect(0, -h * 0.25, w - 12 * ui, h * 0.3, 8 * ui);
+  fill(44, 26, 12);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textSize(Math.min(18 * ui, (w - 16 * ui) / (txt.length * 0.6)));
+  text(txt, 0, 2);
+  pop();
+}
+
+function botoesTela() {
+  const l = [];
+  if (estado === "pausa") {
+    l.push({ id: "retomar", txt: "▶ CONTINUAR", cor: [150, 176, 80] });
+    l.push({ id: "reiniciar", txt: "REINICIAR", cor: [232, 168, 60] });
+    l.push({ id: "menu", txt: "MENU INICIAL", cor: [120, 150, 190] });
+  } else if (estado === "fim") {
+    if (!usouContinuar && tempo >= CONFIG.segundosParaContinuar) l.push({ id: "continuar", txt: "▶ CONTINUAR (anúncio)", cor: [232, 168, 60] });
+    if (ganho > 0 && !dobrou) l.push({ id: "dobrar", txt: "★ DOBRAR MOEDAS (anúncio)", cor: [236, 196, 70] });
+    l.push({ id: "novo", txt: "JOGAR DE NOVO", cor: [150, 176, 80] });
+    l.push({ id: "menu", txt: "MENU INICIAL", cor: [120, 150, 190] });
+  } else if (estado === "vitoria") {
+    if (save.n < NIVEIS.length - 1) l.push({ id: "proximo", txt: "PRÓXIMO NÍVEL ▶", cor: [150, 176, 80] });
+    if (ganho > 0 && !dobrou) l.push({ id: "dobrar", txt: "★ DOBRAR MOEDAS (anúncio)", cor: [236, 196, 70] });
+    l.push({ id: "novo", txt: "JOGAR DE NOVO", cor: [232, 168, 60] });
+    l.push({ id: "menu", txt: "MENU INICIAL", cor: [120, 150, 190] });
+  }
+  const dois = estado !== "pausa";
+  const comp = height < 560;
+  const y0 = estado === "pausa" ? height * 0.42 : height * 0.6;
+  const bw = dois ? Math.min(280 * ui, width * 0.44) : btnLargura(), h = 52 * ui, esp = (comp ? 56 : 62) * ui;
+  l.forEach((b, i) => {
+    b.w = bw; b.h = h;
+    if (dois) {
+      const linha = Math.floor(i / 2), ultimoSozinho = i === l.length - 1 && l.length % 2 === 1;
+      b.x = ultimoSozinho ? width / 2 : width / 2 + (i % 2 === 0 ? -1 : 1) * (bw / 2 + 8 * ui);
+      b.y = y0 + linha * esp;
+    } else { b.x = width / 2; b.y = y0 + i * esp * 0.95; }
+  });
+  return l;
+}
+
+function desenharApoioLink() {
+  if (!CONFIG.mostrarApoio) return;
+  fill(240, 150, 150);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textSize(14 * ui);
+  text("♥ Apoie o criador", width / 2, height * 0.93);
+}
+
+function desenharPausa() {
+  fill(14, 8, 6, 0.65);
+  rect(0, 0, width, height);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  textoContorno("PAUSADO", width / 2, height * 0.16, 46 * ui, [255, 238, 200], [60, 34, 16], 7 * ui);
+  fill(226, 210, 180);
+  textStyle(NORMAL);
+  textSize(15 * ui);
+  text(NA.nome + "  ·  " + BA.nome + "  ·  " + PA.nome, width / 2, height * 0.27);
+  for (const b of botoesTela()) botao(b.txt, b.x, b.y, b.w, b.h, b.cor, false);
+  desenharApoioLink();
+}
+
+function desenharMoedasGanhas(y) {
+  moeda(width / 2 - 60 * ui, y, 10 * ui);
+  fill(250, 220, 130);
+  textAlign(LEFT, CENTER);
+  textStyle(BOLD);
+  textSize(19 * ui);
+  text("+" + ganho + " moedas" + (dobrou ? " (x2)" : ""), width / 2 - 44 * ui, y + 1);
+}
+
+function desenharVitoria() {
+  fill(14, 10, 4, 0.7);
+  rect(0, 0, width, height);
+  textAlign(CENTER, CENTER);
+  textStyle(BOLD);
+  push();
+  textFont("Georgia, serif");
+  textoContorno("NÍVEL COMPLETO!", width / 2, height * 0.13, 44 * ui, [255, 226, 120], [80, 48, 12], 7 * ui);
+  pop();
+  for (let i = 0; i < 3; i++) {
+    const k = constrain((tempoFim - 0.3 - i * 0.35) * 4, 0, 1);
+    const s = 26 * ui * (0.4 + 0.6 * k) * (i === 1 ? 1.2 : 1);
+    estrela(width / 2 + (i - 1) * 74 * ui, height * 0.3 - (i === 1 ? 8 * ui : 0), s, i < estrelasGanhas && k > 0);
+  }
+  fill(255, 244, 218);
+  textAlign(CENTER, CENTER);
+  textStyle(NORMAL);
+  textSize(16 * ui);
+  text(NA.nome + " (" + NA.dif + ")   |   Abates: " + abates + "   |   Tempo: " + fmtTempo(tempo), width / 2, height * 0.42);
+  desenharMoedasGanhas(height * 0.5);
+  for (const b of botoesTela()) botao(b.txt, b.x, b.y, b.w, b.h, b.cor, b.id === "proximo");
+  textAlign(CENTER, CENTER);
+  desenharApoioLink();
+}
+
+function acaoBotao(id) {
+  if (id === "retomar") estado = "jogando";
+  else if (id === "reiniciar") novaPartida();
+  else if (id === "menu") irParaMenu();
+  else if (id === "continuar") mostrarAnuncio("recompensado", continuarPartida);
+  else if (id === "dobrar") mostrarAnuncio("recompensado", dobrarMoedas);
+  else if (id === "novo") jogarDeNovo();
+  else if (id === "proximo") { save.n = Math.min(NIVEIS.length - 1, save.n + 1); salvar(); aplicarSelecao(); novaPartida(); }
+}
+
+function cliqueMenu(x, y) {
+  const C = cartasMenu();
+  for (let i = 0; i < 3; i++) {
+    const c = C[i];
+    if (x > c.x && x < c.x + c.w && y > c.y && y < c.y + c.h) {
+      colMenu = i;
+      if (i === 0 && !possui(save.p)) {
+        const b = botaoComprar(c);
+        if (acertou(x, y, b.x, b.y, b.w, b.h + 8)) { comprar(); return; }
+      }
+      if (x < c.x + c.w * 0.3) trocar(i, -1);
+      else if (x > c.x + c.w * 0.7) trocar(i, 1);
+      return;
+    }
+  }
+  const j = rectJogar();
+  if (acertou(x, y, j.x, j.y, j.w, j.h)) { if (podeJogar()) novaPartida(); return; }
+  const a = rectApoio();
+  if (CONFIG.mostrarApoio && acertou(x, y, a.x, a.y, a.w, a.h)) abrirApoio();
 }
